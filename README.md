@@ -266,6 +266,21 @@ Une reprise (`--resume`) relit l'architecture depuis la configuration
 embarquée dans le checkpoint : elle fonctionne sans avoir à repasser
 `--preset`.
 
+## Limites connues
+
+* **Résolution 48 px** : imposée par le budget de calcul (entraînement sur
+  machine personnelle, MPS). Le terme « photo-réaliste » du sujet n'est atteint
+  qu'au sens du réalisme distributionnel mesuré (FID) à cette résolution ; les
+  FID absolus ne sont pas comparables aux références haute résolution de la
+  littérature. Seules les comparaisons internes, à protocole constant, sont
+  interprétables.
+* **Contrôle d'âge** : inopérant sur le modèle v1 (cf. section précédente),
+  corrigé par ré-entraînement à partir des labels d'âge continus. Le genre et
+  la tonalité de peau, eux, sont contrôlés dès v1.
+* **Juge d'évaluation** : le classifieur de fidélité plafonne à 62 % sur la
+  peau et commet 6,5 ans d'erreur sur images réelles ; les scores de fidélité
+  sont donc des bornes inférieures.
+
 ## Éthique (résumé — détails dans le rapport, section 7)
 
 Dataset FairFace choisi pour son équilibre démographique ; évaluation par
