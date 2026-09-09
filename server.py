@@ -209,8 +209,7 @@ if __name__ == "__main__":
                 break
     ENGINE = Engine(ckpt=args.ckpt, cgan_ckpt=args.cgan_ckpt,
                     image_size=args.image_size, demo=args.demo,
-                    calibration=None if args.no_calibration
-                    else "runs/ddpm/age_calibration.json",
+                    calibration=None if args.no_calibration else "auto",
                     best_of=args.best_of, clf=args.clf)
     print(f"VISAGE Studio -> http://localhost:{args.port} "
           f"({'DÉMO' if ENGINE.demo else 'modèle chargé'}, {ENGINE.device})")

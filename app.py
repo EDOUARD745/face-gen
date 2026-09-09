@@ -7,6 +7,7 @@ Sans checkpoint (démo UI seule) :
     python app.py --demo
 """
 import argparse
+import pathlib
 
 import numpy as np
 import torch
@@ -241,9 +242,22 @@ SKIN_CHOICES = [f"{SKIN_LABELS_FR[s]}" for s in SKIN_GROUPS]
 # Backend
 # ---------------------------------------------------------------------------
 class Engine:
+    @staticmethod
+    def _default_calibration(ckpt):
+        """Calibration voisine du checkpoint chargé, pas celle d'un autre run.
+
+        Chaque modèle a sa propre fonction de réponse en âge : appliquer la
+        table d'un autre run corrigerait dans le vide.
+        """
+        if not ckpt:
+            return None
+        cand = pathlib.Path(ckpt).parent / "age_calibration.json"
+        return str(cand) if cand.exists() else None
+
     def __init__(self, ckpt=None, cgan_ckpt=None, image_size=64, demo=False,
-                 calibration="runs/ddpm/age_calibration.json", best_of=1,
-                 clf=None):
+                 calibration="auto", best_of=1, clf=None):
+        if calibration == "auto":
+            calibration = self._default_calibration(ckpt)
         self.demo = demo or ckpt is None
         self.image_size = image_size
         self.device = get_device()
@@ -596,8 +610,7 @@ if __name__ == "__main__":
 
     engine = Engine(ckpt=args.ckpt, cgan_ckpt=args.cgan_ckpt,
                     image_size=args.image_size, demo=args.demo,
-                    calibration=None if args.no_calibration
-                    else "runs/ddpm/age_calibration.json",
+                    calibration=None if args.no_calibration else "auto",
                     best_of=args.best_of, clf=args.clf)
     ui = build_ui(engine)
     launch_kw = {"share": args.share}

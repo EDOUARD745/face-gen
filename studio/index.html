@@ -34,8 +34,12 @@ body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opac
 /* ---------- header ---------- */
 header{
   display:flex;align-items:center;justify-content:space-between;
+  flex-wrap:wrap;gap:14px 24px;
   padding:22px 40px;border-bottom:1px solid var(--hair);
 }
+header nav{display:flex;flex-wrap:wrap}
+/* sous 620px le badge d'état passerait seul sur une ligne : on le masque */
+@media(max-width:620px){.status{display:none}}
 .wordmark{display:flex;align-items:baseline;gap:14px}
 .wordmark h1{
   font-family:'Fraunces',serif;font-weight:340;font-size:1.5rem;
@@ -58,11 +62,15 @@ nav button.on{background:var(--ink);color:var(--bg);font-weight:500}
 .dot.demo{background:#f5b942;box-shadow:0 0 10px #f5b942}
 
 /* ---------- layout ---------- */
-main{display:grid;grid-template-columns:390px 1fr;min-height:calc(100vh - 73px)}
-@media(max-width:960px){main{grid-template-columns:1fr}}
+main{display:grid;grid-template-columns:390px minmax(0,1fr);
+  min-height:calc(100vh - 73px)}
+@media(max-width:1100px){main{grid-template-columns:1fr}
+  .deck{border-right:none;border-bottom:1px solid var(--hair)}}
 .deck{border-right:1px solid var(--hair);padding:44px 40px;display:flex;
   flex-direction:column;gap:38px}
-.canvas{padding:44px 48px;display:flex;flex-direction:column;gap:24px}
+.canvas{padding:44px 48px;display:flex;flex-direction:column;gap:24px;min-width:0}
+@media(max-width:640px){.canvas{padding:32px 22px}.deck{padding:32px 22px}
+  header{padding:18px 22px}}
 
 /* ---------- deck ---------- */
 .field label{display:block;font-size:.64rem;letter-spacing:.26em;
@@ -154,7 +162,8 @@ kbd{font-size:.62rem;color:var(--ink-dim);text-align:center;margin-top:10px;
   font-size:1.24rem;color:var(--ink-dim)}
 .stepinfo{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;
   color:var(--accent);min-height:1em}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
+.grid{display:grid;gap:14px;min-width:0;
+  grid-template-columns:repeat(auto-fill,minmax(min(100%,158px),1fr))}
 .card{
   aspect-ratio:1;background:var(--bg2);border:1px solid var(--hair);
   overflow:hidden;position:relative;
@@ -190,12 +199,17 @@ kbd{font-size:.62rem;color:var(--ink-dim);text-align:center;margin-top:10px;
 .filmrow img:hover{opacity:1;transform:translateY(-3px)}
 
 /* ---------- morph & atlas ---------- */
-.duo{display:grid;grid-template-columns:1fr 1fr;gap:26px}
-.mini{border:1px solid var(--hair);padding:22px;display:grid;gap:18px}
+.duo{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));
+  gap:26px}
+.mini{border:1px solid var(--hair);padding:22px;display:grid;gap:18px;min-width:0}
 .mini h3{font-family:'Fraunces',serif;font-style:italic;font-weight:340;
   color:var(--ink-dim);font-size:1rem}
-.strip{display:flex;gap:0;overflow-x:auto;border:1px solid var(--hair)}
-.strip img{height:150px;flex:none;display:block}
+.strip{display:flex;gap:0;overflow-x:auto;border:1px solid var(--hair);
+  max-width:100%;scrollbar-width:thin}
+/* les vignettes se partagent la largeur : une morphose se lit d'un coup
+   d'œil, pas en faisant défiler. En dessous de 70px on redonne le défilement. */
+.strip img{flex:1 1 0;min-width:70px;height:auto;aspect-ratio:1;
+  object-fit:cover;display:block}
 .chips{display:flex;gap:10px;flex-wrap:wrap}
 .chip{border:1px solid var(--hair);background:none;color:var(--ink-dim);
   padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit;
