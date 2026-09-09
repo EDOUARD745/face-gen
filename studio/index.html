@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VISAGE Studio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Space+Grotesk:wght@300..700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#08080b; --bg2:#0c0c11; --ink:#edebe6; --ink-dim:rgba(237,235,230,.42);
+  --ink-faint:rgba(237,235,230,.16); --hair:rgba(237,235,230,.09);
+  --accent:#7c5cff; --accent-soft:rgba(124,92,255,.16);
+  --ease:cubic-bezier(.22,1,.36,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{color-scheme:dark}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:'Space Grotesk',sans-serif; font-weight:340;
+  min-height:100vh; overflow-x:hidden;
+}
+/* fond : halo + grain */
+body::before{content:'';position:fixed;inset:-30%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 40% 28% at 75% -5%, rgba(124,92,255,.14), transparent 60%),
+    radial-gradient(ellipse 30% 22% at 12% 108%, rgba(124,92,255,.08), transparent 60%);
+  animation:drift 30s ease-in-out infinite alternate}
+@keyframes drift{to{transform:translate(-2%,1.5%) scale(1.05)}}
+body::after{content:'';position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.045;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+#appwrap{position:relative;z-index:1}
+
+/* ---------- header ---------- */
+header{
+  display:flex;align-items:center;justify-content:space-between;
+  padding:22px 40px;border-bottom:1px solid var(--hair);
+}
+.wordmark{display:flex;align-items:baseline;gap:14px}
+.wordmark h1{
+  font-family:'Fraunces',serif;font-weight:340;font-size:1.5rem;
+  letter-spacing:.42em;text-indent:.42em;
+  animation:reveal 1.1s var(--ease) both;
+}
+@keyframes reveal{from{opacity:0;letter-spacing:.7em;filter:blur(6px)}to{opacity:1;filter:none}}
+.wordmark span{font-size:.62rem;letter-spacing:.3em;color:var(--ink-dim);text-transform:uppercase}
+nav{display:flex;gap:4px;border:1px solid var(--hair);border-radius:999px;padding:4px}
+nav button{
+  background:none;border:none;color:var(--ink-dim);cursor:pointer;
+  font-family:inherit;font-size:.78rem;letter-spacing:.12em;text-transform:uppercase;
+  padding:8px 20px;border-radius:999px;transition:all .3s var(--ease);
+}
+nav button:hover{color:var(--ink)}
+nav button.on{background:var(--ink);color:var(--bg);font-weight:500}
+.status{display:flex;align-items:center;gap:8px;font-size:.68rem;
+  letter-spacing:.18em;text-transform:uppercase;color:var(--ink-dim)}
+.dot{width:7px;height:7px;border-radius:50%;background:#3ddc97;box-shadow:0 0 10px #3ddc97}
+.dot.demo{background:#f5b942;box-shadow:0 0 10px #f5b942}
+
+/* ---------- layout ---------- */
+main{display:grid;grid-template-columns:390px 1fr;min-height:calc(100vh - 73px)}
+@media(max-width:960px){main{grid-template-columns:1fr}}
+.deck{border-right:1px solid var(--hair);padding:44px 40px;display:flex;
+  flex-direction:column;gap:38px}
+.canvas{padding:44px 48px;display:flex;flex-direction:column;gap:24px}
+
+/* ---------- deck ---------- */
+.field label{display:block;font-size:.64rem;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--ink-dim);margin-bottom:14px}
+.agebox{display:flex;align-items:baseline;gap:12px}
+.agebox .num{
+  font-family:'Fraunces',serif;font-style:italic;font-weight:320;
+  font-size:5.4rem;line-height:.9;font-variant-numeric:tabular-nums;
+  transition:color .2s}
+.agebox .unit{color:var(--ink-dim);font-size:.85rem;letter-spacing:.1em}
+input[type=range]{
+  -webkit-appearance:none;appearance:none;width:100%;height:26px;margin-top:10px;
+  background:transparent;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:1px;background:var(--ink-faint)}
+input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:15px;height:15px;margin-top:-7px;
+  background:var(--ink);transform:rotate(45deg);
+  transition:background .2s,box-shadow .2s}
+input[type=range]:hover::-webkit-slider-thumb,
+input[type=range]:focus::-webkit-slider-thumb{
+  background:var(--accent);box-shadow:0 0 16px rgba(124,92,255,.7)}
+input[type=range]::-moz-range-track{height:1px;background:var(--ink-faint)}
+input[type=range]::-moz-range-thumb{width:13px;height:13px;border:none;border-radius:0;
+  background:var(--ink);transform:rotate(45deg)}
+
+.seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--hair)}
+.seg button{
+  background:none;border:none;color:var(--ink-dim);cursor:pointer;
+  font-family:inherit;font-size:.8rem;letter-spacing:.14em;text-transform:uppercase;
+  padding:13px;transition:all .25s var(--ease)}
+.seg button+button{border-left:1px solid var(--hair)}
+.seg button.on{background:var(--ink);color:var(--bg);font-weight:500}
+
+.swatches{display:flex;gap:13px;flex-wrap:wrap}
+.sw{
+  width:38px;height:38px;border-radius:50%;cursor:pointer;position:relative;
+  border:none;outline:2px solid transparent;outline-offset:4px;
+  transition:transform .25s var(--ease),outline-color .25s}
+.sw:hover{transform:scale(1.14)}
+.sw.on{outline-color:var(--ink);transform:scale(1.1)}
+.swname{margin-top:12px;font-size:.78rem;color:var(--ink-dim);
+  font-style:italic;font-family:'Fraunces',serif;min-height:1.2em}
+
+details{border-top:1px solid var(--hair);padding-top:20px}
+details summary{
+  cursor:pointer;list-style:none;font-size:.64rem;letter-spacing:.26em;
+  text-transform:uppercase;color:var(--ink-dim);display:flex;
+  align-items:center;gap:10px;transition:color .2s}
+details summary:hover{color:var(--ink)}
+details summary::after{content:'+';font-size:1rem;margin-left:auto;
+  transition:transform .3s var(--ease)}
+details[open] summary::after{transform:rotate(45deg)}
+.fine{display:grid;gap:18px;padding-top:22px}
+.fine .row{display:grid;grid-template-columns:1fr auto;align-items:center;gap:12px}
+.fine .row label{margin:0;font-size:.7rem}
+.fine .val{font-family:'Fraunces',serif;font-style:italic;min-width:36px;
+  text-align:right;color:var(--accent)}
+.fine input[type=number]{
+  background:none;border:1px solid var(--hair);color:var(--ink);
+  font-family:inherit;padding:7px 10px;width:96px;font-size:.85rem}
+.fine input[type=number]:focus{outline:none;border-color:var(--accent)}
+
+.go{
+  margin-top:auto;position:relative;overflow:hidden;
+  background:var(--ink);color:var(--bg);border:none;cursor:pointer;
+  font-family:inherit;font-weight:560;font-size:.82rem;
+  letter-spacing:.3em;text-transform:uppercase;text-indent:.3em;
+  padding:19px;transition:all .3s var(--ease)}
+.go:hover{background:var(--accent);color:#fff;box-shadow:0 8px 40px rgba(124,92,255,.45)}
+.go:active{transform:scale(.98)}
+.go:disabled{opacity:.45;cursor:wait}
+.go::after{content:'';position:absolute;top:0;left:-70%;width:45%;height:100%;
+  transform:skewX(-22deg);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.35),transparent);
+  transition:left .55s var(--ease)}
+.go:hover::after{left:135%}
+kbd{font-size:.62rem;color:var(--ink-dim);text-align:center;margin-top:10px;
+  letter-spacing:.1em;font-family:inherit}
+
+/* ---------- canvas ---------- */
+.progress{height:1px;background:var(--ink-faint);position:relative;overflow:hidden;
+  opacity:0;transition:opacity .3s}
+.progress.on{opacity:1}
+.progress i{position:absolute;inset:0;transform-origin:left;transform:scaleX(0);
+  background:linear-gradient(90deg,var(--accent),#b39dff);display:block;
+  transition:transform .25s linear;box-shadow:0 0 12px rgba(124,92,255,.8)}
+.canvashead{display:flex;justify-content:space-between;align-items:baseline}
+.canvashead h2{font-family:'Fraunces',serif;font-weight:340;font-style:italic;
+  font-size:1.24rem;color:var(--ink-dim)}
+.stepinfo{font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;
+  color:var(--accent);min-height:1em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(158px,1fr));gap:14px}
+.card{
+  aspect-ratio:1;background:var(--bg2);border:1px solid var(--hair);
+  overflow:hidden;position:relative;
+  animation:cardin .7s var(--ease) both}
+@keyframes cardin{from{opacity:0;transform:translateY(18px) scale(.96)}to{opacity:1}}
+.card img{width:100%;height:100%;object-fit:cover;display:block;
+  image-rendering:auto;transition:transform .45s var(--ease)}
+.card:hover img{transform:scale(1.06)}
+.card .cap{
+  position:absolute;inset:auto 0 0 0;padding:20px 10px 8px;font-size:.6rem;
+  letter-spacing:.12em;text-transform:uppercase;color:rgba(255,255,255,.85);
+  background:linear-gradient(transparent,rgba(0,0,0,.75));
+  opacity:0;transition:opacity .3s}
+.card:hover .cap{opacity:1}
+.skel{position:relative;overflow:hidden}
+.skel::after{content:'';position:absolute;inset:0;
+  background:linear-gradient(100deg,transparent 30%,rgba(237,235,230,.06) 50%,transparent 70%);
+  animation:shine 1.4s linear infinite;background-size:200% 100%}
+@keyframes shine{to{background-position:-200% 0}}
+.empty{
+  border:1px dashed var(--ink-faint);padding:70px 30px;text-align:center;
+  color:var(--ink-dim);font-family:'Fraunces',serif;font-style:italic;font-size:1.05rem}
+
+/* ---------- pellicule ---------- */
+.film{border-top:1px solid var(--hair);padding-top:16px;margin-top:auto}
+.film label{font-size:.6rem;letter-spacing:.26em;text-transform:uppercase;
+  color:var(--ink-dim)}
+.filmrow{display:flex;gap:8px;overflow-x:auto;padding:12px 0 4px}
+.filmrow img{
+  width:52px;height:52px;object-fit:cover;cursor:pointer;flex:none;
+  border:1px solid var(--hair);opacity:.55;
+  transition:opacity .25s,transform .25s var(--ease)}
+.filmrow img:hover{opacity:1;transform:translateY(-3px)}
+
+/* ---------- morph & atlas ---------- */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+.mini{border:1px solid var(--hair);padding:22px;display:grid;gap:18px}
+.mini h3{font-family:'Fraunces',serif;font-style:italic;font-weight:340;
+  color:var(--ink-dim);font-size:1rem}
+.strip{display:flex;gap:0;overflow-x:auto;border:1px solid var(--hair)}
+.strip img{height:150px;flex:none;display:block}
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{border:1px solid var(--hair);background:none;color:var(--ink-dim);
+  padding:8px 18px;border-radius:999px;cursor:pointer;font-family:inherit;
+  font-size:.8rem;transition:all .25s var(--ease)}
+.chip.on{background:var(--accent-soft);border-color:var(--accent);color:var(--ink)}
+.row-inline{display:flex;gap:22px;align-items:end;flex-wrap:wrap}
+.view{display:none}
+.view.on{display:flex;flex-direction:column;gap:24px}
+.banner{background:rgba(245,185,66,.1);border:1px solid rgba(245,185,66,.35);
+  color:#f5b942;padding:10px 16px;font-size:.72rem;letter-spacing:.14em;
+  text-transform:uppercase;text-align:center}
+.gifout{max-width:340px;border:1px solid var(--hair)}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="appwrap">
+<header>
+  <div class="wordmark"><h1>VISAGE</h1><span>studio génératif</span></div>
+  <nav>
+    <button class="on" data-view="studio">Studio</button>
+    <button data-view="morph">Morphose</button>
+    <button data-view="atlas">Atlas</button>
+    <button data-view="duel">Duel</button>
+    <button data-view="about">À propos</button>
+  </nav>
+  <div class="status"><span class="dot" id="dot"></span><span id="statustxt">connexion…</span></div>
+</header>
+
+<main>
+  <!-- ================= DECK ================= -->
+  <aside class="deck">
+    <div id="demobanner" class="banner" style="display:none">mode démo · aucun modèle chargé</div>
+
+    <div class="field">
+      <label>Âge</label>
+      <div class="agebox"><span class="num" id="agenum">30</span><span class="unit">ans</span></div>
+      <input type="range" id="age" min="18" max="70" value="30">
+    </div>
+
+    <div class="field">
+      <label>Genre</label>
+      <div class="seg" id="gender">
+        <button class="on" data-v="0">Homme</button>
+        <button data-v="1">Femme</button>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Tonalité de peau</label>
+      <div class="swatches" id="swatches"></div>
+      <div class="swname" id="swname"></div>
+    </div>
+
+    <details>
+      <summary>Réglages fins</summary>
+      <div class="fine">
+        <div class="row"><label>Visages</label><span class="val" id="nval">6</span></div>
+        <input type="range" id="n" min="1" max="12" value="6">
+        <div class="row"><label>Guidance · fidélité</label><span class="val" id="gval">3.0</span></div>
+        <input type="range" id="guidance" min="1" max="8" step="0.5" value="3">
+        <div class="row"><label>Pas de débruitage</label><span class="val" id="sval">40</span></div>
+        <input type="range" id="steps" min="10" max="100" step="5" value="40">
+        <div class="row"><label>Seed (-1 aléatoire)</label>
+          <input type="number" id="seed" value="-1"></div>
+      </div>
+    </details>
+
+    <button class="go" id="go">Générer</button>
+    <kbd>↵ Entrée pour générer</kbd>
+  </aside>
+
+  <!-- ================= CANVAS ================= -->
+  <section class="canvas">
+    <div class="progress" id="prog"><i id="progbar"></i></div>
+
+    <!-- Studio -->
+    <div class="view on" id="view-studio">
+      <div class="canvashead">
+        <h2 id="canvastitle">Le modèle attend vos directives</h2>
+        <span class="stepinfo" id="stepinfo"></span>
+      </div>
+      <div class="grid" id="grid">
+        <div class="empty" style="grid-column:1/-1">
+          Choisissez un âge, un genre, une tonalité - puis générez.
+        </div>
+      </div>
+      <div class="film" id="film" style="display:none">
+        <label>Historique de séance</label>
+        <div class="filmrow" id="filmrow"></div>
+      </div>
+    </div>
+
+    <!-- Morphose -->
+    <div class="view" id="view-morph">
+      <div class="canvashead"><h2>Une identité, deux destins - transition continue</h2>
+        <span class="stepinfo" id="morphinfo"></span></div>
+      <div class="duo">
+        <div class="mini"><h3>Départ A</h3>
+          <div class="field"><label>Âge <span class="val" id="ma_v">20</span></label>
+            <input type="range" id="ma" min="18" max="70" value="20"></div>
+          <div class="seg" id="mga"><button class="on" data-v="0">Homme</button><button data-v="1">Femme</button></div>
+          <div class="swatches sw-sm" id="swa"></div>
+        </div>
+        <div class="mini"><h3>Arrivée B</h3>
+          <div class="field"><label>Âge <span class="val" id="mb_v">68</span></label>
+            <input type="range" id="mb" min="18" max="70" value="68"></div>
+          <div class="seg" id="mgb"><button class="on" data-v="0">Homme</button><button data-v="1">Femme</button></div>
+          <div class="swatches sw-sm" id="swb"></div>
+        </div>
+      </div>
+      <div class="row-inline">
+        <div class="field"><label>Étapes <span class="val" id="mf_v">8</span></label>
+          <input type="range" id="mf" min="4" max="14" value="8" style="width:150px"></div>
+        <div class="field"><label>Seed identité</label>
+          <input type="number" id="mseed" value="0" style="background:none;border:1px solid var(--hair);color:var(--ink);padding:8px;width:90px"></div>
+        <button class="go" style="margin:0;padding:14px 30px" id="morphgo">Morphoser</button>
+        <button class="chip" id="gifgo">Exporter GIF</button>
+      </div>
+      <div class="strip" id="morphstrip"></div>
+      <img class="gifout" id="gifout" style="display:none">
+    </div>
+
+    <!-- Atlas -->
+    <div class="view" id="view-atlas">
+      <div class="canvashead"><h2>Une seule identité, toute l'humanité</h2>
+        <span class="stepinfo" id="atlasinfo"></span></div>
+      <div class="row-inline">
+        <div class="chips" id="agechips"></div>
+        <div class="field"><label>Seed identité</label>
+          <input type="number" id="aseed" value="7" style="background:none;border:1px solid var(--hair);color:var(--ink);padding:8px;width:90px"></div>
+        <button class="go" style="margin:0;padding:14px 30px" id="atlasgo">Composer l'atlas</button>
+      </div>
+      <div class="grid" id="atlasgrid" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))"></div>
+    </div>
+    <!-- Duel DDPM vs cGAN -->
+    <div class="view" id="view-duel">
+      <div class="canvashead"><h2>Diffusion contre adversaire - mêmes attributs, deux écoles</h2>
+        <span class="stepinfo" id="duelinfo"></span></div>
+      <p style="color:var(--ink-dim);font-size:.85rem;max-width:60ch">
+        Le panneau de gauche pilote les deux modèles : le DDPM conditionnel
+        (notre approche) et le cGAN à projection (méthode de référence)
+        reçoivent exactement les mêmes attributs.</p>
+      <div class="row-inline">
+        <button class="go" style="margin:0;padding:14px 30px" id="duelgo">Lancer le duel</button>
+        <span id="nocgan" style="color:var(--ink-dim);font-size:.75rem;display:none">
+          checkpoint cGAN absent : colonne de droite en mode démo</span>
+      </div>
+      <div class="duo">
+        <div class="mini"><h3>DDPM + Classifier-Free Guidance</h3>
+          <div class="grid" id="duel_ddpm" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))"></div>
+        </div>
+        <div class="mini"><h3>cGAN à projection (baseline)</h3>
+          <div class="grid" id="duel_cgan" style="grid-template-columns:repeat(auto-fill,minmax(120px,1fr))"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- À propos -->
+    <div class="view" id="view-about">
+      <div class="canvashead"><h2>Sous le capot</h2></div>
+      <div class="duo">
+        <div class="mini">
+          <h3>Pipeline</h3>
+          <p style="font-size:.85rem;line-height:1.9;color:var(--ink-dim)">
+            Attributs (âge, genre, peau) → embeddings appris →
+            UNet conditionnel (ε-prédicteur) → échantillonnage DDIM +
+            classifier-free guidance → visage synthétique.<br><br>
+            <b style="color:var(--ink)">Encodage</b> : âge = scalaire continu
+            [18-70] → embedding sinusoïdal ; genre et peau = tables
+            d'embeddings ; masquage aléatoire (p=0.1) à l'entraînement
+            pour le CFG.<br><br>
+            <b style="color:var(--ink)">Guidance</b> :
+            ε̂ = ε(x,∅) + w·(ε(x,c) − ε(x,∅)) - w règle le compromis
+            fidélité/diversité, exposé dans les réglages fins.
+          </p>
+        </div>
+        <div class="mini">
+          <h3>Éthique</h3>
+          <p style="font-size:.85rem;line-height:1.9;color:var(--ink-dim)">
+            Entraîné sur <b style="color:var(--ink)">FairFace</b>, corpus
+            construit pour l'équilibre démographique (7 groupes à parts
+            quasi égales).<br><br>
+            Tous les visages sont <b style="color:var(--ink)">synthétiques</b> :
+            générés depuis du bruit pur, sans inversion ni édition de
+            personnes réelles - le système ne peut représenter personne
+            d'existant.<br><br>
+            Usage réservé à la recherche et à la pédagogie. L'équité de
+            génération est mesurée par groupe (FID et fidélité par groupe,
+            voir rapport section 7).
+          </p>
+          <p id="aboutmeta" style="font-size:.7rem;letter-spacing:.15em;
+             text-transform:uppercase;color:var(--accent)"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+
+<script>
+const SKIN_HEX = ["#F1D3C2","#6E4A32","#C68E63","#F2D8B1","#C79B6D","#A06A45","#D3A67C"];
+let META = {skins: [], demo: true};
+const S = {age:30, gender:0, skin:0, n:6, guidance:3, steps:40, seed:-1};
+const M = {a:{age:20,g:0,s:0}, b:{age:68,g:0,s:0}, frames:8, seed:0};
+const A = {ages:[25,45,65], seed:7};
+const $ = id => document.getElementById(id);
+const api = (path, body) => fetch(path, body ? {method:'POST',
+  headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)} : {})
+  .then(r => { if(!r.ok) throw new Error('API '+r.status); return r.json(); });
+
+/* ---------- swatches ---------- */
+function buildSwatches(el, onPick, getSel){
+  el.innerHTML = '';
+  SKIN_HEX.forEach((hex, i) => {
+    const b = document.createElement('button');
+    b.className = 'sw' + (getSel() === i ? ' on' : '');
+    b.style.background = `radial-gradient(circle at 32% 30%, ${hex}, ${hex}cc)`;
+    b.title = META.skins[i] || '';
+    b.onclick = () => { onPick(i);
+      [...el.children].forEach((c, j) => c.classList.toggle('on', j === i)); };
+    el.appendChild(b);
+  });
+}
+
+/* ---------- deck bindings ---------- */
+$('age').oninput = e => { S.age = +e.target.value; $('agenum').textContent = S.age; };
+$('n').oninput = e => { S.n = +e.target.value; $('nval').textContent = S.n; };
+$('guidance').oninput = e => { S.guidance = +e.target.value; $('gval').textContent = S.guidance.toFixed(1); };
+$('steps').oninput = e => { S.steps = +e.target.value; $('sval').textContent = S.steps; };
+$('seed').oninput = e => { S.seed = parseInt(e.target.value || -1); };
+function segBind(el, set){ [...el.children].forEach(b => b.onclick = () => {
+  set(+b.dataset.v);
+  [...el.children].forEach(c => c.classList.toggle('on', c === b)); }); }
+segBind($('gender'), v => S.gender = v);
+segBind($('mga'), v => M.a.g = v);
+segBind($('mgb'), v => M.b.g = v);
+$('ma').oninput = e => { M.a.age = +e.target.value; $('ma_v').textContent = M.a.age; };
+$('mb').oninput = e => { M.b.age = +e.target.value; $('mb_v').textContent = M.b.age; };
+$('mf').oninput = e => { M.frames = +e.target.value; $('mf_v').textContent = M.frames; };
+$('mseed').oninput = e => M.seed = parseInt(e.target.value || 0);
+$('aseed').oninput = e => A.seed = parseInt(e.target.value || 7);
+
+/* ---------- tabs ---------- */
+document.querySelectorAll('nav button').forEach(b => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.view').forEach(v =>
+    v.classList.toggle('on', v.id === 'view-' + b.dataset.view));
+});
+
+/* ---------- age chips (atlas) ---------- */
+[25,35,45,55,65].forEach(a => {
+  const c = document.createElement('button');
+  c.className = 'chip' + (A.ages.includes(a) ? ' on' : '');
+  c.textContent = a + ' ans';
+  c.onclick = () => { const i = A.ages.indexOf(a);
+    i >= 0 ? A.ages.splice(i,1) : A.ages.push(a);
+    c.classList.toggle('on'); };
+  $('agechips').appendChild(c);
+});
+
+/* ---------- progression ---------- */
+let pollTimer = null;
+function poll(jid, info, onDone){
+  $('prog').classList.add('on');
+  pollTimer = setInterval(async () => {
+    try{
+      const j = await api('/api/job/' + jid);
+      const f = j.total ? j.done / j.total : 0;
+      $('progbar').style.transform = `scaleX(${f})`;
+      if(info) info.textContent = j.status === 'running'
+        ? `débruitage ${j.done}/${j.total}` : '';
+      if(j.status !== 'running'){
+        clearInterval(pollTimer);
+        $('prog').classList.remove('on');
+        $('progbar').style.transform = 'scaleX(0)';
+        if(j.status === 'error'){ if(info) info.textContent = 'erreur : ' + j.error; }
+        else onDone(j);
+      }
+    }catch(e){ clearInterval(pollTimer); }
+  }, 280);
+}
+
+/* ---------- studio ---------- */
+function skeletons(n){
+  $('grid').innerHTML = '';
+  for(let i = 0; i < n; i++){
+    const d = document.createElement('div');
+    d.className = 'card skel';
+    d.style.animationDelay = (i * 55) + 'ms';
+    $('grid').appendChild(d);
+  }
+}
+function showImages(imgs){
+  $('grid').innerHTML = '';
+  const cap = `${S.age} ans · ${S.gender ? 'Femme' : 'Homme'} · ${META.skins[S.skin] || ''}`;
+  imgs.forEach((src, i) => {
+    const d = document.createElement('div');
+    d.className = 'card';
+    d.style.animationDelay = (i * 70) + 'ms';
+    d.innerHTML = `<img src="${src}"><div class="cap">${cap}</div>`;
+    $('grid').appendChild(d);
+    const t = document.createElement('img');
+    t.src = src; t.title = cap;
+    t.onclick = () => window.open(src);
+    $('filmrow').prepend(t);
+  });
+  $('film').style.display = 'block';
+  $('canvastitle').textContent = cap;
+}
+async function generate(){
+  $('go').disabled = true;
+  $('canvastitle').textContent = 'Le modèle débruite…';
+  skeletons(S.n);
+  try{
+    const {job} = await api('/api/generate', S);
+    poll(job, $('stepinfo'), j => { showImages(j.images); $('go').disabled = false; });
+  }catch(e){ $('canvastitle').textContent = 'Serveur injoignable'; $('go').disabled = false; }
+}
+$('go').onclick = generate;
+document.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.target.matches('input[type=number]')) generate();
+});
+
+/* ---------- morphose ---------- */
+async function morph(gif){
+  $('morphinfo').textContent = 'calcul de la transition…';
+  const body = {age_a:M.a.age, gender_a:M.a.g, skin_a:M.a.s,
+                age_b:M.b.age, gender_b:M.b.g, skin_b:M.b.s,
+                frames:M.frames, guidance:S.guidance, seed:M.seed, gif:!!gif};
+  const {job} = await api('/api/morph', body);
+  poll(job, $('morphinfo'), j => {
+    $('morphstrip').innerHTML = j.images.map(s => `<img src="${s}">`).join('');
+    if(j.gif){ $('gifout').src = j.gif; $('gifout').style.display = 'block'; }
+    $('morphinfo').textContent = '';
+  });
+}
+$('morphgo').onclick = () => morph(false);
+$('gifgo').onclick = () => morph(true);
+
+/* ---------- atlas ---------- */
+$('atlasgo').onclick = async () => {
+  $('atlasinfo').textContent = 'composition…';
+  $('atlasgrid').innerHTML = '';
+  const total = 14 * A.ages.length;
+  for(let i = 0; i < total; i++){
+    const d = document.createElement('div');
+    d.className = 'card skel';
+    $('atlasgrid').appendChild(d);
+  }
+  const {job} = await api('/api/atlas',
+    {ages:A.ages.sort((x,y)=>x-y), guidance:S.guidance, steps:30, seed:A.seed});
+  poll(job, $('atlasinfo'), j => {
+    $('atlasgrid').innerHTML = '';
+    j.images.forEach((src, i) => {
+      const d = document.createElement('div');
+      d.className = 'card';
+      d.style.animationDelay = (i * 30) + 'ms';
+      d.innerHTML = `<img src="${src}"><div class="cap">${j.captions[i]}</div>`;
+      $('atlasgrid').appendChild(d);
+    });
+  });
+};
+
+/* ---------- duel ---------- */
+$('duelgo').onclick = async () => {
+  $('duelinfo').textContent = 'les deux modèles travaillent…';
+  const skel = el => { el.innerHTML = '';
+    for(let i = 0; i < 4; i++){ const d = document.createElement('div');
+      d.className = 'card skel'; el.appendChild(d); } };
+  skel($('duel_ddpm')); skel($('duel_cgan'));
+  const {job} = await api('/api/compare',
+    {age:S.age, gender:S.gender, skin:S.skin, n:4,
+     guidance:S.guidance, seed:42});
+  poll(job, $('duelinfo'), j => {
+    const fill = (el, imgs) => { el.innerHTML = '';
+      (imgs || []).forEach((src, i) => { const d = document.createElement('div');
+        d.className = 'card'; d.style.animationDelay = (i*60)+'ms';
+        d.innerHTML = `<img src="${src}">`; el.appendChild(d); }); };
+    fill($('duel_ddpm'), j.images);
+    fill($('duel_cgan'), j.images_b);
+    $('duelinfo').textContent = '';
+  });
+};
+
+/* ---------- init ---------- */
+(async () => {
+  try{
+    META = await api('/api/meta');
+    $('statustxt').textContent = META.demo
+      ? 'démo · ' + META.device : 'modèle actif · ' + META.device;
+    if(META.demo){ $('dot').classList.add('demo');
+      $('demobanner').style.display = 'block'; }
+    buildSwatches($('swatches'), i => { S.skin = i;
+      $('swname').textContent = META.skins[i]; }, () => S.skin);
+    buildSwatches($('swa'), i => M.a.s = i, () => M.a.s);
+    buildSwatches($('swb'), i => M.b.s = i, () => M.b.s);
+    $('swname').textContent = META.skins[0] || '';
+    if(!META.cgan) $('nocgan').style.display = 'inline';
+    $('aboutmeta').textContent = (META.demo ? 'mode démo' : 'modèle actif')
+      + ' · ' + META.device + ' · ' + META.image_size + 'px';
+  }catch(e){
+    $('statustxt').textContent = 'serveur hors ligne';
+    $('dot').style.background = '#e05252';
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# Données (licence FairFace : ne pas redistribuer)
+data/
+# Poids (volumineux ; publiés hors dépôt / LFS)
+*.pt
+runs/**/tb/
+# Logs et caches
+logs/
+__pycache__/
+*.pyc
+.DS_Store
+.venv/

@@ -1,0 +1,25 @@
+# Coeur
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24
+Pillow>=10.0
+opencv-python>=4.8
+
+# Données & utilitaires
+pandas>=2.0
+tqdm>=4.66
+pyyaml>=6.0
+
+# Évaluation
+torchmetrics[image]>=1.3   # FID, Inception Score
+lpips>=0.1.4               # Diversité perceptuelle
+torch-fidelity>=0.3.0      # Backend torchmetrics
+
+# Monitoring & figures
+tensorboard>=2.15
+matplotlib>=3.8
+
+# Interfaces
+gradio>=4.44          # démo Gradio (app.py) + déploiement HF Spaces
+fastapi>=0.110        # VISAGE Studio (server.py)
+uvicorn>=0.29
