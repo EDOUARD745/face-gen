@@ -16,7 +16,8 @@ import gradio as gr
 from src.config import Config
 from src.utils import get_device, load_ddpm_from_ckpt
 from src.data import normalize_age, SKIN_GROUPS
-from src.sampling import load_calibration, sample_best_of
+from src.sampling import (load_calibration, resample_artifacts,
+                          sample_best_of)
 from src.models.cgan import Generator
 from src.interpolate import interpolate as interp_fn
 
@@ -255,7 +256,8 @@ class Engine:
         return str(cand) if cand.exists() else None
 
     def __init__(self, ckpt=None, cgan_ckpt=None, image_size=64, demo=False,
-                 calibration="auto", best_of=1, clf=None):
+                 calibration="auto", best_of=1, clf=None,
+                 reject_artifacts=True):
         if calibration == "auto":
             calibration = self._default_calibration(ckpt)
         self.demo = demo or ckpt is None
@@ -266,6 +268,9 @@ class Engine:
         # corrige la compression de la réponse en âge sans ré-entraînement.
         self.calibration = load_calibration(calibration)
         self.best_of = max(1, int(best_of))
+        # Démonstrateur uniquement : ~2-3 % des tirages sortent de la plage
+        # colorimétrique des images réelles (visages verts). On les régénère.
+        self.reject_artifacts = reject_artifacts
         self.clf = None
         if self.best_of > 1 and clf:
             from src.train_classifier import AttributeClassifier
@@ -330,6 +335,8 @@ class Engine:
             x = sample_best_of(gen, attrs, n, self.clf, k=self.best_of)
         else:
             x = gen(attrs, n)
+        if self.reject_artifacts:
+            x = resample_artifacts(gen, attrs, n, x=x)
         return self._to_pil_list(x)
 
     def interpolate(self, age_a, gender_a, skin_a, age_b, gender_b, skin_b,

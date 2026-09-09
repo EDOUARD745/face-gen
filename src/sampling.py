@@ -102,6 +102,44 @@ def sample_best_of(gen_fn, attrs, n, clf, k=4, **score_kw):
     return best_x
 
 
+# Bornes colorimétriques mesurées sur FairFace 48 px (1024 images de
+# validation, 99e centile) : au-delà, un tirage sort de la plage des images
+# réelles. Environ 2-3 % des tirages du modèle v2 franchissent ce seuil et
+# apparaissent comme des visages verts ou sursaturés.
+REAL_SAT_P99 = 0.487
+REAL_CAST_P99 = 0.480
+
+
+@torch.no_grad()
+def colour_outliers(x, sat_max=REAL_SAT_P99, cast_max=REAL_CAST_P99):
+    """Masque (B,) des tirages hors de la plage colorimétrique du réel."""
+    im = (x.clamp(-1, 1) + 1) / 2
+    sat = (im.max(1).values - im.min(1).values).mean((1, 2))
+    ch = im.mean((2, 3))
+    cast = ch.max(1).values - ch.min(1).values
+    return (sat > sat_max) | (cast > cast_max)
+
+
+@torch.no_grad()
+def resample_artifacts(gen_fn, attrs, n, x=None, max_rounds=3):
+    """Régénère les tirages aberrants, sans toucher aux autres.
+
+    Réservé à la DÉMONSTRATION : appliqué pendant une évaluation, ce filtre
+    embellirait le FID en écartant les mauvais tirages du modèle. Les
+    métriques du rapport sont mesurées sans lui.
+    """
+    if x is None:
+        x = gen_fn(attrs, n)
+    for _ in range(max_rounds):
+        bad = colour_outliers(x)
+        if not bad.any():
+            break
+        idx = bad.nonzero(as_tuple=True)[0]
+        sub = {k: v[idx] for k, v in attrs.items()}
+        x[idx] = gen_fn(sub, len(idx))
+    return x
+
+
 def make_controlled_sampler(gen_fn, clf=None, calibration=None, best_of=1,
                             **score_kw):
     """Enveloppe un générateur brut avec calibration + rejet.
