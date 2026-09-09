@@ -56,6 +56,12 @@ def main():
     p.add_argument("--resume", default=None)
     p.add_argument("--preset", default=None, choices=["mac"],
                    help="'mac' : modèle allégé pour Apple Silicon (MPS)")
+    p.add_argument("--independent-drop", action="store_true",
+                   help="masque chaque attribut indépendamment (CFG) : force "
+                        "le réseau à exploiter l'âge seul")
+    p.add_argument("--ema-decay", type=float, default=None,
+                   help="décroissance EMA (défaut 0.9999 ; 0.999 pour un "
+                        "fine-tune court, sinon l'EMA masque le progrès)")
     p.add_argument("--age-jitter", action="store_true",
                    help="tire l'âge dans la tranche FairFace annotée au lieu "
                         "du point médian : restaure un support d'âge continu "
@@ -101,6 +107,14 @@ def main():
 
     torch.manual_seed(cfg.train.seed)
     device = get_device()
+    # Après --resume et --preset, qui peuvent remplacer cfg.diffusion en bloc.
+    if args.independent_drop:
+        cfg.diffusion.independent_cond_drop = True
+    if args.ema_decay is not None:
+        cfg.train.ema_decay = args.ema_decay
+    print(f"Masquage indépendant par attribut : "
+          f"{cfg.diffusion.independent_cond_drop} | EMA {cfg.train.ema_decay}")
+
     out = pathlib.Path(cfg.train.out_dir)
     out.mkdir(parents=True, exist_ok=True)
     cfg.save(out / "config.json")
@@ -162,8 +176,11 @@ def main():
             attrs = {k: v.to(device, non_blocking=True) for k, v in attrs.items()}
 
             with torch.amp.autocast("cuda", enabled=cfg.train.amp and device == "cuda"):
-                loss = diffusion.loss(imgs, attrs,
-                                      cond_drop_prob=cfg.diffusion.cond_drop_prob)
+                loss = diffusion.loss(
+                    imgs, attrs,
+                    cond_drop_prob=cfg.diffusion.cond_drop_prob,
+                    independent_drop=cfg.diffusion.independent_cond_drop,
+                    joint_drop_prob=cfg.diffusion.joint_drop_prob)
 
             # Garde-fou NaN n°1 : loss non finie -> batch ignoré, poids intacts
             if not torch.isfinite(loss):

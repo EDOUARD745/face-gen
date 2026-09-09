@@ -1,0 +1,56 @@
+{
+  "data": {
+    "dataset": "fairface",
+    "root": "data/fairface",
+    "image_size": 48,
+    "min_age": 18,
+    "max_age": 70,
+    "num_workers": 4,
+    "age_jitter": true
+  },
+  "diffusion": {
+    "timesteps": 1000,
+    "schedule": "cosine",
+    "cond_drop_prob": 0.1,
+    "guidance_scale": 3.0,
+    "independent_cond_drop": true,
+    "joint_drop_prob": 0.05,
+    "ddim_steps": 50,
+    "ddim_eta": 0.0
+  },
+  "model": {
+    "base_channels": 64,
+    "channel_mults": [
+      1,
+      2,
+      4
+    ],
+    "attn_resolutions": [
+      12
+    ],
+    "num_res_blocks": 2,
+    "dropout": 0.1,
+    "emb_dim": 256
+  },
+  "gan": {
+    "latent_dim": 128,
+    "base_channels": 64,
+    "lr_g": 0.0002,
+    "lr_d": 0.0002,
+    "beta1": 0.5,
+    "beta2": 0.999
+  },
+  "train": {
+    "batch_size": 32,
+    "lr": 0.0001,
+    "epochs": 48,
+    "ema_decay": 0.999,
+    "grad_clip": 1.0,
+    "amp": true,
+    "log_every": 100,
+    "sample_every": 2000,
+    "ckpt_every": 5000,
+    "out_dir": "runs/ddpm_ft2",
+    "seed": 42
+  }
+}

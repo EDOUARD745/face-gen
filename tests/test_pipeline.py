@@ -116,10 +116,49 @@ def test_best_of_selectionne_le_plus_conforme():
     check("k lots générés", calls["i"] == 2)
 
 
+def test_conditionnement_par_attribut():
+    """Masquage indépendant et guidage compositionnel (petit UNet, CPU)."""
+    from src.diffusion import GaussianDiffusion
+    from src.models.unet import ConditionalUNet
+
+    torch.manual_seed(0)
+    m = ConditionalUNet(image_size=16, base_channels=32, channel_mults=(1, 2),
+                        num_res_blocks=1, attn_resolutions=(), emb_dim=32)
+    diff = GaussianDiffusion(m, timesteps=50, schedule="cosine", device="cpu")
+    n = 4
+    x0 = torch.randn(n, 3, 16, 16)
+    attrs = {"age": torch.rand(n), "gender": torch.zeros(n, dtype=torch.long),
+             "skin": torch.zeros(n, dtype=torch.long)}
+
+    l1 = diff.loss(x0, attrs, cond_drop_prob=0.1)
+    l2 = diff.loss(x0, attrs, cond_drop_prob=0.1, independent_drop=True)
+    check("perte finie (masquage groupé)", torch.isfinite(l1))
+    check("perte finie (masquage indépendant)", torch.isfinite(l2))
+
+    E = m.attr_embedder
+    c_age = E.condition_keeping(attrs, ("age",))
+    c_all = E(attrs)
+    check("condition 'âge seul' de la bonne forme", c_age.shape == c_all.shape)
+    same_age = torch.allclose(
+        E.condition_keeping(attrs, ("age",)), E.condition_keeping(attrs, ("age",)))
+    check("condition déterministe", same_age)
+    check("'âge seul' diffère de la condition complète",
+          not torch.allclose(c_age, c_all))
+
+    shape = (n, 3, 16, 16)
+    x_std = diff.sample_ddim(attrs, shape, steps=3, guidance_scale=3.0)
+    x_cmp = diff.sample_ddim(attrs, shape, steps=3,
+                             guidance_scale={"age": 6.0, "gender": 3.0, "skin": 3.0})
+    check("échantillonnage CFG standard", x_std.shape == shape and torch.isfinite(x_std).all())
+    check("échantillonnage compositionnel", x_cmp.shape == shape and torch.isfinite(x_cmp).all())
+    check("les deux guidages diffèrent", not torch.allclose(x_std, x_cmp))
+
+
 def main():
     for fn in (test_age_encoding_roundtrip, test_bins_coherents, test_support_age,
                test_calibration_refuse_reponse_plate,
-               test_best_of_selectionne_le_plus_conforme):
+               test_best_of_selectionne_le_plus_conforme,
+               test_conditionnement_par_attribut):
         print(f"\n{fn.__name__}")
         fn()
     print("\nTous les tests passent.")

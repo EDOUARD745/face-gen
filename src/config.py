@@ -29,6 +29,10 @@ class DiffusionConfig:
     # Classifier-Free Guidance (Ho & Salimans, 2022)
     cond_drop_prob: float = 0.1        # proba de masquer la condition à l'entraînement
     guidance_scale: float = 3.0        # w à l'échantillonnage (1.0 = pas de guidage)
+    # Masquage indépendant par attribut : force le réseau à exploiter chaque
+    # attribut seul (défaut False = configuration du run v1).
+    independent_cond_drop: bool = False
+    joint_drop_prob: float = 0.05
     ddim_steps: int = 50               # échantillonnage rapide quasi temps réel
     ddim_eta: float = 0.0
 

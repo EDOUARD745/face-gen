@@ -55,22 +55,49 @@ class AttributeEmbedder(nn.Module):
         self.null_gender = nn.Parameter(torch.zeros(emb_dim))
         self.null_skin = nn.Parameter(torch.zeros(emb_dim))
 
+    def parts(self, attrs):
+        """Embedding de chaque attribut, séparément."""
+        # âge continu x 1000 pour couvrir la gamme de fréquences sinusoïdales
+        return {
+            "age": self.age_mlp(
+                sinusoidal_embedding(attrs["age"] * 1000.0, self.emb_dim)),
+            "gender": self.gender_emb(attrs["gender"]),
+            "skin": self.skin_emb(attrs["skin"]),
+        }
+
     def forward(self, attrs, drop_mask=None):
         """attrs : dict(age (B,), gender (B,), skin (B,)).
-        drop_mask : (B,) bool -- True = condition masquée (CFG).
+
+        drop_mask : (B,) bool -- True = TOUTE la condition est masquée, ou
+        dict {attribut: (B,) bool} -- masquage indépendant par attribut. Le
+        masquage indépendant est ce qui force le réseau à exploiter chaque
+        attribut isolément : sommés puis masqués en bloc, deux attributs forts
+        (genre, peau) suffisent à annuler la perte et un attribut faible
+        (l'âge) peut être ignoré sans jamais coûter.
         """
-        b = attrs["age"].shape[0]
-        # âge continu x 1000 pour couvrir la gamme de fréquences sinusoïdales
-        age = self.age_mlp(sinusoidal_embedding(attrs["age"] * 1000.0, self.emb_dim))
-        gender = self.gender_emb(attrs["gender"])
-        skin = self.skin_emb(attrs["skin"])
+        parts = self.parts(attrs)
+        nulls = {"age": self.null_age, "gender": self.null_gender,
+                 "skin": self.null_skin}
 
         if drop_mask is not None:
-            m = drop_mask[:, None].float()
-            age = m * self.null_age[None] + (1 - m) * age
-            gender = m * self.null_gender[None] + (1 - m) * gender
-            skin = m * self.null_skin[None] + (1 - m) * skin
-        return age + gender + skin
+            masks = drop_mask if isinstance(drop_mask, dict) else \
+                {k: drop_mask for k in parts}
+            for k, v in parts.items():
+                m = masks[k][:, None].float()
+                parts[k] = m * nulls[k][None] + (1 - m) * v
+        return parts["age"] + parts["gender"] + parts["skin"]
+
+    def condition_keeping(self, attrs, keep):
+        """Condition où seuls les attributs de `keep` sont renseignés.
+
+        Utilisé par le guidage compositionnel : la branche « âge seul » mesure
+        la direction propre à l'âge, indépendamment du genre et de la peau.
+        """
+        b = attrs["age"].shape[0]
+        dev = attrs["age"].device
+        masks = {k: torch.full((b,), k not in keep, dtype=torch.bool, device=dev)
+                 for k in ("age", "gender", "skin")}
+        return self.forward(attrs, masks)
 
     def null_condition(self, batch_size, device):
         """Vecteur de conditionnement 'vide' pour la branche inconditionnelle."""
