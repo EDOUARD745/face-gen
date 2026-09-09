@@ -8,6 +8,11 @@ Projet MSC AIC. Système de génération conditionnelle de visages contrôlant
 Classifier-Free Guidance, échantillonnage DDIM (quasi temps réel).
 **Baseline de comparaison** : cGAN à discriminateur à projection.
 
+**Modèle livré : v2** (`runs/ddpm_ft2/ckpt_last.pt`) — FID 24,0, MAE d'âge
+10,8 ans, fidélité genre 86,8 %. Il succède à v1 (FID 40,2) dont le contrôle
+d'âge était inopérant ; le diagnostic et la correction sont documentés
+ci-dessous et au §6-8 du rapport d'expériences.
+
 ```
 Attributs ──► Embeddings appris ──► UNet conditionnel ──► DDIM 50 pas + CFG ──► Visage
  (âge, genre,    (sinusoïdal +         (ε-prédicteur,        w réglable
@@ -240,20 +245,54 @@ deux modèles), **À propos** (pipeline + éthique).
 `python app.py --ckpt ... --share` → URL publique `xxx.gradio.live`,
 valable tant que la machine tourne (72h max par lien). Idéal soutenance.
 
-**Option B — lien permanent : Hugging Face Spaces (recommandé pour le rapport)**
+**Option B — lien permanent : Hugging Face Spaces**
 
-1. Créer un compte sur https://huggingface.co → New Space → SDK **Gradio**,
-   hardware **CPU basic** (gratuit).
-2. Pousser dans le Space : `app.py`, `src/`, `requirements.txt`
-   et le checkpoint `ckpt_last.pt` (à la racine — l'app le détecte
-   automatiquement ; fichier >10 Mo : `git lfs track "*.pt"` avant commit).
-3. Le Space se construit et sert l'app à une URL permanente
-   `https://huggingface.co/spaces/<user>/<space>`.
+⚠️ **Depuis 2025, un Space Gradio ou Docker sur `cpu-basic` exige un compte
+PRO** (9 $/mois). L'API renvoie sinon `402 Payment Required`. Seuls les
+**Static Spaces** (HTML/JS, sans backend Python) restent gratuits.
 
-Sur CPU gratuit, compter ~10-30 s par visage avec le modèle préset mac
-(48px, DDIM 30 pas) — réduire le slider "Pas DDIM" dans l'interface.
-Ne pas pousser le dataset FairFace (licence + poids inutile) : seul le
-checkpoint est nécessaire à la démo.
+Le bundle de déploiement est préparé dans `deploy/space/` (61 Mo) :
+
+```
+deploy/space/
+├── app.py             # interface Gradio (défauts abaissés si device == cpu)
+├── src/               # modèle, diffusion, échantillonnage
+├── ckpt_last.pt       # poids EMA seuls : 64 Mo au lieu de 254
+├── requirements.txt   # inférence uniquement (ni tensorboard, ni lpips…)
+└── README.md          # en-tête YAML du Space + avertissements + éthique
+```
+
+Le régénérer après un nouvel entraînement :
+
+```bash
+python3 -c "
+import torch; ck = torch.load('runs/ddpm_ft2/ckpt_last.pt', map_location='cpu')
+torch.save({'ema': ck['ema'], 'config': ck['config'], 'step': ck['step'],
+            'epoch': ck['epoch']}, 'deploy/space/ckpt_last.pt')"
+```
+
+Le pousser (compte PRO requis, token en écriture) :
+
+```bash
+python3 -c "
+from huggingface_hub import create_repo, upload_folder
+R = 'elouamou/visage-generation-visages'
+create_repo(R, repo_type='space', space_sdk='gradio', private=False, exist_ok=True)
+upload_folder(repo_id=R, repo_type='space', folder_path='deploy/space')"
+```
+
+**Performances CPU mesurées** (2 threads, équivalent `cpu-basic`) :
+7,8 s par visage à 30 pas DDIM, 13,6 s à 50 pas. Un Space endormi
+(48 h sans visite) met 30 à 60 s à se réveiller : le signaler dans le
+README du Space, sinon un visiteur pressé conclut à une panne.
+
+Ne pas pousser le dataset FairFace (licence, et inutile à la démo) : seul
+le checkpoint sert.
+
+**Si le budget PRO n'est pas disponible** : un Static Space gratuit peut
+héberger une galerie pré-calculée (grille de visages couvrant l'espace
+d'attributs, générée hors ligne). Instantané pour le visiteur, mais ce
+n'est plus le modèle qui tourne — à écrire explicitement sur la page.
 
 ## Reproductibilité
 
@@ -287,9 +326,15 @@ d'entraînement.
   FID absolus ne sont pas comparables aux références haute résolution de la
   littérature. Seules les comparaisons internes, à protocole constant, sont
   interprétables.
-* **Contrôle d'âge** : inopérant sur le modèle v1 (cf. section précédente),
-  corrigé par ré-entraînement à partir des labels d'âge continus. Le genre et
-  la tonalité de peau, eux, sont contrôlés dès v1.
+* **Contrôle d'âge** : inopérant sur v1, rétabli sur v2 (`runs/ddpm_ft2/`).
+  Effectif entre ~26 et ~62 ans ; aux extrémités (18 et 70 ans) la réponse
+  reste tirée vers le centre, faute de données. Entre 26 et 62 ans, l'erreur
+  passe sous celle du juge sur images réelles (6,5 ans) : la métrique sature.
+* **Budget de conditionnement** : les trois attributs sont sommés en un
+  vecteur unique, donc renforcer le guidage de l'âge dégrade le genre et la
+  peau (~3,5 points de fidélité genre par année de MAE gagnée, cf.
+  `figures/age_guidance_tradeoff.png`). Le réglage livré est le guidage
+  standard, sans supplément d'âge.
 * **Juge d'évaluation** : le classifieur de fidélité plafonne à 62 % sur la
   peau et commet 6,5 ans d'erreur sur images réelles ; les scores de fidélité
   sont donc des bornes inférieures.

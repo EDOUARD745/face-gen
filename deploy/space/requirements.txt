@@ -1,0 +1,9 @@
+# Dépendances d'INFÉRENCE uniquement (le Space ne fait ni entraînement ni
+# évaluation : ni tensorboard, ni torchmetrics, ni lpips, ni matplotlib).
+torch>=2.1.0
+torchvision>=0.16.0
+numpy>=1.24
+Pillow>=10.0
+pandas>=2.0
+tqdm>=4.66
+gradio>=4.44

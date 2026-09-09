@@ -12,7 +12,21 @@
 
 ---
 
-## État au dernier point
+## État au dernier point (mis à jour)
+
+- ✅ **Modèle v2 livré** : `runs/ddpm_ft2/ckpt_last.pt` — 48 epochs cumulées,
+  99 100 steps, aucun NaN. FID 24,0 (v1 : 40,2), MAE d'âge 10,8 ans, genre
+  86,8 %, peau 44,7 %, LPIPS 0,388.
+- ✅ Contrôle d'âge rétabli : amplitude de réponse 7,7 → 16,2 ans (guidage
+  standard), 29,7 ans avec supplément d'âge. Figures :
+  `figures/age_response_compare.png`, `figures/age_guidance_tradeoff.png`.
+- ✅ Rapport d'expériences complété (sections 6 à 8 : diagnostic, résultats v2,
+  budget de conditionnement, réglage livré).
+- ✅ Bundle de déploiement prêt : `deploy/space/` (61 Mo).
+- ⏳ **Hébergement bloqué** : un Space Gradio sur CPU gratuit exige désormais un
+  compte PRO (402 Payment Required). Voir README, section Déploiement.
+
+## État précédent
 
 - ✅ Données FairFace : `data/fairface/` (64 599 train / 8 100 val avec les points
   médians ; **73 702** avec `--age-jitter`, voir plus bas).
