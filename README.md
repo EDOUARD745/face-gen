@@ -266,6 +266,19 @@ Une reprise (`--resume`) relit l'architecture depuis la configuration
 embarquée dans le checkpoint : elle fonctionne sans avoir à repasser
 `--preset`.
 
+## Tests
+
+```bash
+python3 -m tests.test_pipeline
+```
+
+Vérifications sans GPU ni checkpoint : réversibilité de l'encodage d'âge,
+cohérence tranches/points médians, **support d'âge du dataset** (dégénéré en
+mode historique, continu avec `--age-jitter`), refus d'une calibration non
+inversible, et sélection best-of-k. C'est l'absence de ce dernier type de
+vérification qui a laissé un support d'âge à cinq valeurs traverser 18 h
+d'entraînement.
+
 ## Limites connues
 
 * **Résolution 48 px** : imposée par le budget de calcul (entraînement sur
