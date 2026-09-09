@@ -193,6 +193,10 @@ if __name__ == "__main__":
     p.add_argument("--ckpt", default=os.environ.get("FACEGEN_CKPT"))
     p.add_argument("--cgan-ckpt", default=os.environ.get("FACEGEN_CGAN_CKPT"))
     p.add_argument("--demo", action="store_true")
+    p.add_argument("--no-calibration", action="store_true",
+                   help="désactive la calibration post-hoc de l'âge")
+    p.add_argument("--best-of", type=int, default=1)
+    p.add_argument("--clf", default="runs/classifier/attr_clf.pt")
     p.add_argument("--port", type=int, default=8000)
     # Requis pour charger le cGAN (son checkpoint n'embarque pas sa taille) ;
     # le DDPM se reconstruit depuis sa config. Préset mac -> 48.
@@ -204,7 +208,10 @@ if __name__ == "__main__":
                 args.ckpt = cand
                 break
     ENGINE = Engine(ckpt=args.ckpt, cgan_ckpt=args.cgan_ckpt,
-                    image_size=args.image_size, demo=args.demo)
+                    image_size=args.image_size, demo=args.demo,
+                    calibration=None if args.no_calibration
+                    else "runs/ddpm/age_calibration.json",
+                    best_of=args.best_of, clf=args.clf)
     print(f"VISAGE Studio -> http://localhost:{args.port} "
           f"({'DÉMO' if ENGINE.demo else 'modèle chargé'}, {ENGINE.device})")
     uvicorn.run(app, host="0.0.0.0", port=args.port)

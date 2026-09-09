@@ -46,6 +46,18 @@ FAIRFACE_AGE_MIDPOINTS = {
     "40-49": 44.5, "50-59": 54.5, "60-69": 64.5, "more than 70": 75,
 }
 
+# Bornes réelles des tranches FairFace. Le point médian ci-dessus écrase
+# l'information d'intervalle : après le filtre 18-70 ans, seules cinq valeurs
+# d'âge subsistent (24,5 / 34,5 / ... / 64,5) et la tranche 10-19 disparaît
+# entièrement alors qu'elle couvre 18 et 19 ans. Ces bornes permettent le mode
+# `age_jitter` : on tire l'âge uniformément dans l'intersection de la tranche
+# et de la plage demandée, ce qui restaure un support continu sur 18-70.
+FAIRFACE_AGE_BINS = {
+    "0-2": (0, 2), "3-9": (3, 9), "10-19": (10, 19), "20-29": (20, 29),
+    "30-39": (30, 39), "40-49": (40, 49), "50-59": (50, 59),
+    "60-69": (60, 69), "more than 70": (70, 90),
+}
+
 # Correspondance UTKFace (race: 0 White, 1 Black, 2 Asian, 3 Indian, 4 Others)
 UTK_TO_SKIN = {0: 0, 1: 1, 2: 3, 3: 5, 4: 2}
 
@@ -82,13 +94,25 @@ class FairFaceDataset(Dataset):
     """FairFace filtré sur la plage d'âge du sujet (18-70 ans)."""
 
     def __init__(self, root, split="train", image_size=64,
-                 min_age=18, max_age=70, train_tf=True):
+                 min_age=18, max_age=70, train_tf=True, age_jitter=False):
         self.root = pathlib.Path(root)
         csv = self.root / f"fairface_label_{split}.csv"
         df = pd.read_csv(csv)
 
-        df["age_years"] = df["age"].map(FAIRFACE_AGE_MIDPOINTS)
-        df = df[(df["age_years"] >= min_age) & (df["age_years"] <= max_age)]
+        self.age_jitter = age_jitter
+        if age_jitter:
+            # On garde toute tranche qui INTERSECTE [min_age, max_age] et on
+            # borne l'intervalle ; l'âge exact est tiré au vol dans __getitem__.
+            lo = df["age"].map(lambda a: FAIRFACE_AGE_BINS[a][0])
+            hi = df["age"].map(lambda a: FAIRFACE_AGE_BINS[a][1])
+            df = df[(hi > min_age) & (lo < max_age)].copy()
+            df["age_lo"] = lo[df.index].clip(lower=min_age)
+            df["age_hi"] = hi[df.index].clip(upper=max_age)
+            df["age_years"] = (df["age_lo"] + df["age_hi"]) / 2.0
+        else:
+            # Comportement historique (run principal) : point médian de tranche.
+            df["age_years"] = df["age"].map(FAIRFACE_AGE_MIDPOINTS)
+            df = df[(df["age_years"] >= min_age) & (df["age_years"] <= max_age)]
         df = df[df["race"].isin(SKIN_GROUPS)]
         self.df = df.reset_index(drop=True)
 
@@ -101,7 +125,12 @@ class FairFaceDataset(Dataset):
     def __getitem__(self, i):
         row = self.df.iloc[i]
         img = Image.open(self.root / row["file"]).convert("RGB")
-        age = normalize_age(row["age_years"], self.min_age, self.max_age)
+        if self.age_jitter:
+            years = np.random.uniform(row["age_lo"], row["age_hi"] + 1.0)
+            years = min(years, self.max_age)
+        else:
+            years = row["age_years"]
+        age = normalize_age(years, self.min_age, self.max_age)
         gender = 0 if row["gender"] == "Male" else 1
         skin = SKIN_GROUPS.index(row["race"])
         return self.tf(img), {
@@ -148,7 +177,8 @@ def make_dataset(cfg, split="train", train_tf=True):
     if cfg.dataset == "fairface":
         return FairFaceDataset(cfg.root, split=split, image_size=cfg.image_size,
                                min_age=cfg.min_age, max_age=cfg.max_age,
-                               train_tf=train_tf)
+                               train_tf=train_tf,
+                               age_jitter=getattr(cfg, "age_jitter", False))
     if cfg.dataset == "utkface":
         return UTKFaceDataset(cfg.root, image_size=cfg.image_size,
                               min_age=cfg.min_age, max_age=cfg.max_age,

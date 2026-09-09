@@ -56,6 +56,10 @@ def main():
     p.add_argument("--resume", default=None)
     p.add_argument("--preset", default=None, choices=["mac"],
                    help="'mac' : modèle allégé pour Apple Silicon (MPS)")
+    p.add_argument("--age-jitter", action="store_true",
+                   help="tire l'âge dans la tranche FairFace annotée au lieu "
+                        "du point médian : restaure un support d'âge continu "
+                        "sur 18-70 (cf. src/data.py)")
     args = p.parse_args()
 
     cfg = Config()
@@ -63,6 +67,21 @@ def main():
     cfg.data.image_size = args.image_size
     cfg.train.batch_size, cfg.train.epochs = args.batch_size, args.epochs
     cfg.train.lr, cfg.train.out_dir = args.lr, args.out_dir
+    cfg.data.age_jitter = args.age_jitter
+
+    if args.resume:
+        # L'architecture doit correspondre au checkpoint : on la relit depuis la
+        # config embarquée (sinon une reprise sans --preset reconstruit un UNet
+        # 64px/128 canaux et le load_state_dict échoue).
+        from .utils import config_from_ckpt
+        _ck = torch.load(args.resume, map_location="cpu")
+        _prev = config_from_ckpt(_ck)
+        cfg.model = _prev.model
+        cfg.diffusion = _prev.diffusion
+        cfg.data.image_size = _prev.data.image_size
+        print(f"Config d'architecture reprise du checkpoint : "
+              f"{cfg.data.image_size}px, base_channels={cfg.model.base_channels}")
+        del _ck
 
     if args.preset == "mac":
         # ~20M params, 48px : qualité correcte en ~1-2 jours sur M1/M2/M3

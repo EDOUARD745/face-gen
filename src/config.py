@@ -16,6 +16,10 @@ class DataConfig:
     min_age: int = 18                  # bornes exigées par le sujet
     max_age: int = 70
     num_workers: int = 4
+    # Restaure un support d'âge continu (tirage dans la tranche annotée) au
+    # lieu des cinq points médians. Défaut False = configuration du run
+    # principal, conservée pour la reproductibilité.
+    age_jitter: bool = False
 
 
 @dataclass

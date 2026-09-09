@@ -15,6 +15,7 @@ import gradio as gr
 from src.config import Config
 from src.utils import get_device, load_ddpm_from_ckpt
 from src.data import normalize_age, SKIN_GROUPS
+from src.sampling import load_calibration, sample_best_of
 from src.models.cgan import Generator
 from src.interpolate import interpolate as interp_fn
 
@@ -240,11 +241,23 @@ SKIN_CHOICES = [f"{SKIN_LABELS_FR[s]}" for s in SKIN_GROUPS]
 # Backend
 # ---------------------------------------------------------------------------
 class Engine:
-    def __init__(self, ckpt=None, cgan_ckpt=None, image_size=64, demo=False):
+    def __init__(self, ckpt=None, cgan_ckpt=None, image_size=64, demo=False,
+                 calibration="runs/ddpm/age_calibration.json", best_of=1,
+                 clf=None):
         self.demo = demo or ckpt is None
         self.image_size = image_size
         self.device = get_device()
         self.diffusion, self.cgan = None, None
+        # Calibration post-hoc de la condition d'âge (cf. src/sampling.py) :
+        # corrige la compression de la réponse en âge sans ré-entraînement.
+        self.calibration = load_calibration(calibration)
+        self.best_of = max(1, int(best_of))
+        self.clf = None
+        if self.best_of > 1 and clf:
+            from src.train_classifier import AttributeClassifier
+            self.clf = AttributeClassifier().to(self.device)
+            self.clf.load_state_dict(torch.load(clf, map_location=self.device))
+            self.clf.eval()
         if not self.demo:
             # Architecture reconstruite depuis la config embarquée dans le
             # checkpoint (compatible préset mac / tailles personnalisées)
@@ -258,9 +271,15 @@ class Engine:
             self.cgan.load_state_dict(ck["G"])
             self.cgan.eval()
 
+    def _age_norm(self, age):
+        """Âge voulu (années) -> valeur de condition normalisée, calibrée."""
+        if self.calibration is not None:
+            age = float(self.calibration.years([age])[0])
+        return normalize_age(age)
+
     def _attrs(self, age, gender, skin, n):
         return {
-            "age": torch.full((n,), normalize_age(age), device=self.device),
+            "age": torch.full((n,), self._age_norm(age), device=self.device),
             "gender": torch.full((n,), gender, dtype=torch.long,
                                  device=self.device),
             "skin": torch.full((n,), skin, dtype=torch.long,
@@ -286,10 +305,17 @@ class Engine:
         if seed >= 0:
             torch.manual_seed(seed)
         attrs = self._attrs(age, gender, skin, n)
-        x = self.diffusion.sample_ddim(
-            attrs, (n, 3, self.image_size, self.image_size),
-            steps=int(steps), guidance_scale=guidance,
-            progress_cb=progress_cb)
+
+        def gen(a, m):
+            return self.diffusion.sample_ddim(
+                a, (m, 3, self.image_size, self.image_size),
+                steps=int(steps), guidance_scale=guidance,
+                progress_cb=progress_cb)
+
+        if self.best_of > 1 and self.clf is not None:
+            x = sample_best_of(gen, attrs, n, self.clf, k=self.best_of)
+        else:
+            x = gen(attrs, n)
         return self._to_pil_list(x)
 
     def interpolate(self, age_a, gender_a, skin_a, age_b, gender_b, skin_b,
@@ -298,7 +324,7 @@ class Engine:
             return self._placeholder(frames)
 
         def mk(age, g, s):
-            return {"age": torch.tensor([normalize_age(age)]),
+            return {"age": torch.tensor([self._age_norm(age)]),
                     "gender": torch.tensor([g]), "skin": torch.tensor([s])}
         x = interp_fn(self.diffusion, mk(age_a, gender_a, skin_a),
                       mk(age_b, gender_b, skin_b), frames=int(frames),
@@ -338,7 +364,7 @@ class Engine:
                           device=self.device, generator=g_rng) \
             .repeat(n, 1, 1, 1)
         attrs = {
-            "age": torch.tensor([normalize_age(a) for _, _, a in combos],
+            "age": torch.tensor([self._age_norm(a) for _, _, a in combos],
                                 device=self.device),
             "gender": torch.tensor([g for _, g, _ in combos],
                                    dtype=torch.long, device=self.device),
@@ -549,6 +575,12 @@ if __name__ == "__main__":
     p.add_argument("--image-size", type=int, default=64)
     p.add_argument("--demo", action="store_true", help="UI sans modèle")
     p.add_argument("--share", action="store_true")
+    p.add_argument("--no-calibration", action="store_true",
+                   help="désactive la calibration post-hoc de l'âge")
+    p.add_argument("--best-of", type=int, default=1,
+                   help="k candidats par requête, le plus conforme est affiché "
+                        "(nécessite --clf) ; coût x k")
+    p.add_argument("--clf", default="runs/classifier/attr_clf.pt")
     args = p.parse_args()
     # Fallback : si un ckpt est présent aux emplacements standards, le charger
     if args.ckpt is None and not args.demo:
@@ -558,7 +590,10 @@ if __name__ == "__main__":
                 break
 
     engine = Engine(ckpt=args.ckpt, cgan_ckpt=args.cgan_ckpt,
-                    image_size=args.image_size, demo=args.demo)
+                    image_size=args.image_size, demo=args.demo,
+                    calibration=None if args.no_calibration
+                    else "runs/ddpm/age_calibration.json",
+                    best_of=args.best_of, clf=args.clf)
     ui = build_ui(engine)
     launch_kw = {"share": args.share}
     if GRADIO_MAJOR >= 6:

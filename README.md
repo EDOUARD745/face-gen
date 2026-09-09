@@ -144,6 +144,68 @@ python -m src.eval_by_group --ckpt runs/ddpm/ckpt_last.pt \
     --clf runs/classifier/attr_clf.pt --data-root data/fairface -n 1000
 ```
 
+## Contrôle de l'âge : défaut identifié, diagnostic et correction
+
+**Le défaut.** FairFace n'annote pas l'âge à l'année mais par tranches. Le
+chargeur les ramenait au point médian *puis* filtrait sur 18-70 ans : après ce
+filtre il ne restait que **cinq valeurs d'âge distinctes** (24,5 / 34,5 / 44,5 /
+54,5 / 64,5) et la tranche 10-19 disparaissait entièrement, alors qu'elle couvre
+les 18-19 ans exigés par le sujet. Le modèle n'a donc jamais vu d'exemple sous
+24,5 ans ni au-dessus de 64,5 ans, et le protocole d'évaluation lui demandait
+des âges hors de ce support.
+
+**Le diagnostic** (`src/age_response.py`) mesure la fonction de réponse
+« âge perçu = f(âge demandé) », le classifieur d'attributs servant de juge :
+
+```bash
+python -m src.age_response --ckpt runs/ddpm/ckpt_last.pt \
+    --clf runs/classifier/attr_clf.pt --image-size 48 -n 48
+```
+
+Sorties : `figures/age_response.png` (figure du rapport), `age_response.csv`,
+et une table de calibration `runs/ddpm/age_calibration.json`. Sur le premier
+modèle, la réponse mesurée est **plate** (amplitude 7,7 ans pour une demande
+allant de 18 à 70 ans) : le contrôle d'âge est absent, pas seulement imprécis.
+La calibration est alors automatiquement marquée `applicable: false` et ignorée
+à l'inférence — inverser une fonction plate reviendrait à maquiller l'absence
+de contrôle.
+
+**La correction** restaure un support continu : l'âge est tiré uniformément
+dans la tranche annotée, bornée à 18-70 (`--age-jitter`, cf. `src/data.py`).
+Le dataset passe de 64 599 images / 5 âges à **73 702 images / âges continus**.
+Le modèle est repris depuis le checkpoint existant (aucune perte des 18 h déjà
+investies) et affiné :
+
+```bash
+PYTORCH_ENABLE_MPS_FALLBACK=1 python3 -m src.train_ddpm \
+    --data-root data/fairface --preset mac --age-jitter \
+    --resume runs/ddpm/ckpt_last.pt --batch-size 32 --lr 5e-5 \
+    --epochs 48 --out-dir runs/ddpm_ft
+```
+
+L'écriture dans un répertoire distinct garantit que le modèle initial reste
+intact et que la comparaison avant/après est reproductible.
+
+**Mitigations à l'inférence** (`src/sampling.py`, sans ré-entraînement) :
+calibration de la condition (quand la réponse est inversible) et échantillonnage
+par rejet — k candidats générés, le plus conforme au sens du classifieur est
+retenu (Azadi et al., 2019) :
+
+```bash
+# Fidélité seule (rapide), avec sélection best-of-4
+python -m src.evaluate --model ddpm --ckpt runs/ddpm/ckpt_last.pt \
+    --clf runs/classifier/attr_clf.pt --data-root data/fairface \
+    --image-size 48 --skip-fid --best-of 4
+```
+
+Le démonstrateur expose la même option (`app.py --best-of 4`, `server.py
+--best-of 4`) ; le coût d'échantillonnage est multiplié par k.
+
+**Protocole d'évaluation.** `--age-sampling support` tire les conditions d'âge
+dans le support réellement appris, `uniform` (défaut) sur 18-70. Les deux sont
+rapportés : le premier mesure le contrôle, le second l'écart au cahier des
+charges.
+
 ## Interfaces (démonstrateur)
 
 Deux interfaces branchées sur le même moteur :
@@ -197,7 +259,12 @@ checkpoint est nécessaire à la démo.
 
 Seed fixée (`config.py`), configuration sauvegardée en JSON dans chaque run,
 checkpoints périodiques avec état optimiseur, poids EMA utilisés pour toute
-génération/évaluation.
+génération/évaluation. Le code est versionné sous git (`git log`) ; les
+données FairFace et les poids sont exclus du dépôt (licence, volume).
+
+Une reprise (`--resume`) relit l'architecture depuis la configuration
+embarquée dans le checkpoint : elle fonctionne sans avoir à repasser
+`--preset`.
 
 ## Éthique (résumé — détails dans le rapport, section 7)
 
