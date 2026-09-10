@@ -1,61 +1,93 @@
-# VISAGE : Génération de visages photo-réalistes avec contrôle d'attributs
+# VISAGE : génération de visages avec contrôle d'attributs démographiques
 
-Projet MSC AIC. Système de génération conditionnelle de visages contrôlant
-**l'âge (18-70 ans, continu)**, **le genre** et **la couleur de peau**
-(7 groupes FairFace).
+Projet MSC AIC, module IA générative.
+Edouard Louamou, Isaac Koumous, Jeffrey Tandjeu, Kelian Suami.
 
-**Approche principale** : DDPM conditionnel entraîné from scratch +
-Classifier-Free Guidance, échantillonnage DDIM (quasi temps réel).
-**Baseline de comparaison** : cGAN à discriminateur à projection.
+Système de génération conditionnelle de visages permettant de contrôler
+l'âge (18 à 70 ans, continu), le genre et la tonalité de peau (7 groupes
+FairFace). L'approche principale est un modèle de diffusion débruitante
+(DDPM) conditionnel entraîné depuis zéro, avec classifier-free guidance et
+échantillonnage DDIM. Un cGAN à discriminateur à projection sert de méthode
+de référence, entraîné sur les mêmes données, à la même résolution et avec
+les mêmes encodages d'attributs.
 
-**Modèle livré : v2** (`runs/ddpm_ft2/ckpt_last.pt`). FID 24,0, MAE d'âge
-10,8 ans, fidélité genre 86,8 %. Il succède à v1 (FID 40,2) dont le contrôle
-d'âge était inopérant ; le diagnostic et la correction sont documentés
-ci-dessous et au §6-8 du rapport d'expériences.
+L'ensemble a été entraîné sur une machine personnelle (Apple M5 Pro, backend
+Metal), sans GPU serveur. Cette contrainte a dicté la résolution de travail
+de 48 pixels et le dimensionnement des modèles.
 
 ```
-Attributs ──► Embeddings appris ──► UNet conditionnel ──► DDIM 50 pas + CFG ──► Visage
- (âge, genre,    (sinusoïdal +         (ε-prédicteur,        w réglable
-  peau)           tables)               ~75M params)
+Attributs            Embeddings          UNet conditionnel      DDIM 50 pas
+(âge, genre, peau) → appris           →  (ε-prédicteur,      →  + guidage    → Visage
+                     (sinusoïdal +       15,9 M paramètres)     w réglable
+                      tables)
 ```
 
-## Structure
+## Résultats
+
+Modèle livré : `runs/ddpm_ft2/ckpt_last.pt` (48 epochs cumulées, 99 144 steps).
+
+| Métrique | DDPM v2 | DDPM v1 | cGAN | Lecture |
+|---|---|---|---|---|
+| FID ↓ | **24,0** | 40,2 | 139,6 | réalisme distributionnel |
+| Inception Score ↑ | 3,31 | 3,35 | 2,01 | qualité et variété |
+| Diversité LPIPS ↑ | 0,388 | 0,401 | 0,001 | 0 = effondrement des modes |
+| Fidélité genre ↑ | 86,8 % | 89,6 % | 70,4 % | juge : classifieur ResNet-18 |
+| Fidélité peau ↑ | 44,7 % | 45,8 % | 21,1 % | plafond du juge : 62 % |
+| MAE d'âge ↓ | 10,8 ans | 12,5 ans | 12,2 ans | 6,1 ans avec guidage d'âge |
+
+Le juge est un classifieur tri-têtes entraîné séparément sur FairFace
+(genre 92,9 %, peau 62,1 %, MAE d'âge 6,5 ans en validation). Les fidélités
+rapportées sont donc des bornes inférieures : l'erreur du générateur et celle
+de l'instrument de mesure s'y additionnent.
+
+Deux résultats méthodologiques sont détaillés dans le rapport d'expériences
+et résumés plus bas : un défaut de conditionnement de l'âge, diagnostiqué et
+corrigé (section 6 à 8 du rapport), et un biais colorimétrique mesuré mais
+délibérément non corrigé (section 8.1).
+
+## Structure du dépôt
 
 ```
 face-gen/
-├── app.py                  # Interface Gradio (démonstrateur)
-├── requirements.txt
-├── rapport/
-│   └── Etat_de_l_art.docx  # Livrable 1 (30%) : ouvrir dans Word,
-│                           #   accepter la mise à jour des champs (sommaire)
+├── app.py                  # démonstrateur Gradio
+├── server.py               # démonstrateur VISAGE Studio (FastAPI)
+├── studio/index.html       # interface du Studio
+├── rapport/                # état de l'art et rapport d'expériences (.docx)
+├── figures/                # figures et données des rapports
+├── deploy/space/           # bundle de déploiement Hugging Face
+├── tests/test_pipeline.py  # tests de non-régression
 └── src/
-    ├── config.py           # Hyperparamètres centralisés (reproductibilité)
-    ├── data.py             # FairFace / UTKFace + encodage des attributs
+    ├── config.py           # hyperparamètres centralisés
+    ├── data.py             # FairFace, UTKFace, encodage des attributs
     ├── diffusion.py        # DDPM, cosine schedule, DDIM, CFG, EMA
-    ├── models/
-    │   ├── unet.py         # UNet conditionnel (temps + attributs)
-    │   └── cgan.py         # Baseline cGAN (projection discriminator)
-    ├── train_ddpm.py       # Entraînement diffusion
-    ├── train_cgan.py       # Entraînement baseline
-    ├── train_classifier.py # Classifieur d'attributs (pour l'évaluation)
-    ├── evaluate.py         # FID, IS, LPIPS intra-condition, fidélité attributs
-    ├── sweep_guidance.py   # Courbes FID/fidélité/diversité vs guidance w
-    ├── eval_by_group.py    # Métriques PAR groupe démographique (équité)
-    └── interpolate.py      # Interpolation continue d'attributs
+    ├── models/unet.py      # UNet conditionnel
+    ├── models/cgan.py      # baseline cGAN
+    ├── sampling.py         # calibration d'âge, rejet, best-of-k
+    ├── train_ddpm.py       # entraînement du modèle principal
+    ├── train_cgan.py       # entraînement de la baseline
+    ├── train_classifier.py # juge d'évaluation
+    ├── evaluate.py         # FID, IS, LPIPS, fidélité aux attributs
+    ├── age_response.py     # fonction de réponse en âge
+    ├── compare_age_response.py  # figure comparative
+    ├── grid_stats.py       # suivi de qualité sans coût GPU
+    ├── sweep_guidance.py   # compromis fidélité/diversité du CFG
+    ├── eval_by_group.py    # métriques par groupe démographique
+    └── interpolate.py      # interpolation continue d'attributs
 ```
 
 ## Installation
 
 ```bash
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Données (FairFace)
+Le device est détecté automatiquement dans l'ordre CUDA, MPS, CPU.
 
-1. Télécharger depuis https://github.com/joojs/fairface :
-   images "padding 0.25" (train + val) et les deux CSV de labels.
-2. Organiser :
+## Données
+
+FairFace, images « padding 0.25 », à télécharger depuis
+https://github.com/joojs/fairface et organiser ainsi :
 
 ```
 data/fairface/
@@ -65,311 +97,202 @@ data/fairface/
 └── val/*.jpg
 ```
 
-Le loader filtre automatiquement les âges hors 18-70 ans (~78k images restantes).
-Alternative : UTKFace (`--dataset utkface`, âge exact à l'année).
+FairFace annote l'âge par tranches. Deux modes de lecture coexistent :
+
+- **mode historique** : chaque tranche est ramenée à son point médian, puis le
+  filtre 18-70 ans est appliqué. 64 599 images d'entraînement, mais cinq
+  valeurs d'âge distinctes seulement.
+- **mode `--age-jitter`** : l'âge est tiré uniformément dans la tranche
+  annotée, bornée à 18-70 ans. 73 702 images et un support continu.
+
+Le second est celui du modèle livré. Le premier est conservé pour reproduire
+le run initial. UTKFace est également pris en charge (`--dataset utkface`),
+avec un âge annoté à l'année.
 
 ## Entraînement
 
-Ordre conseillé : classifieur (rapide, requis pour l'évaluation) → cGAN
-(valide le pipeline données à moindre coût) → DDPM (le gros morceau).
+Ordre conseillé : classifieur, puis cGAN, puis DDPM.
 
 ```bash
-# 1. Classifieur d'attributs (~1h) : nécessaire pour l'évaluation de fidélité
+# 1. Juge d'évaluation (~1 h)
 python -m src.train_classifier --data-root data/fairface --epochs 10
 
-# 2. Baseline cGAN (quelques heures)
-python -m src.train_cgan --data-root data/fairface --image-size 64
+# 2. Baseline cGAN
+python -m src.train_cgan --data-root data/fairface --image-size 48
 
-# 3. DDPM conditionnel (modèle principal) : ~24-48h sur RTX 3080/4090 en 64px
-python -m src.train_ddpm --data-root data/fairface --image-size 64 \
-    --batch-size 64 --epochs 100
-
-# Reprise après interruption
-python -m src.train_ddpm --resume runs/ddpm/ckpt_last.pt
-
-# Suivi : tensorboard --logdir runs
-```
-
-**Avant de lancer les 48h** : laisser tourner ~15 min et vérifier que
-(a) la loss DDPM descend nettement sous 0.1, (b) pas d'erreur mémoire
-(sinon `--batch-size 32`). Pendant l'entraînement, surveiller les grilles
-`runs/ddpm/grid_*.png` : dès 10-20k steps, des visages flous doivent se
-structurer et chaque colonne respecter ses attributs.
-
-Des grilles de contrôle (7 peaux × 2 genres × 3 âges) sont générées
-périodiquement dans `runs/ddpm/` pour suivre visuellement la qualité
-ET le respect des attributs.
-
-Conseils GPU : si mémoire insuffisante, réduire `--batch-size` (32) ;
-`base_channels=96` dans `src/config.py` divise le modèle par ~1.8.
-
-**Matériel** : le device est détecté automatiquement (CUDA > MPS > CPU).
-
-### Entraînement sur Mac Apple Silicon (MPS)
-
-Le préset `mac` allège le modèle (16M params, 48px) pour ramener le DDPM
-à ~1-2 jours sur M1/M2/M3 :
-
-```bash
+# 3. DDPM conditionnel, configuration du modèle livré
 PYTORCH_ENABLE_MPS_FALLBACK=1 python -m src.train_ddpm \
-    --data-root data/fairface --preset mac
+    --data-root data/fairface --preset mac --age-jitter --independent-drop \
+    --ema-decay 0.999 --batch-size 32 --lr 1e-4 --epochs 48
 ```
 
-La configuration est embarquée dans les checkpoints : app, évaluation et
-interpolation reconstruisent automatiquement la bonne architecture
-(`app.py --ckpt ...` fonctionne tel quel). Pour les scripts d'évaluation,
-passer `--image-size 48` afin que les images réelles soient comparées à la
-même résolution. Le classifieur et le cGAN peuvent rester en réglages par
-défaut (rapides même sur MPS). Alternative si les délais sont trop longs :
-Google Colab / Kaggle (30h GPU/semaine gratuites).
+Les présets `mac`, `mac64` et `mac96` fixent la résolution à 48, 64 ou 96
+pixels. L'attention est placée à résolution/4, donc toujours au troisième
+étage du UNet : la structure des modules reste identique d'une résolution à
+l'autre, ce qui permet de reprendre un checkpoint 48 px pour poursuivre
+l'entraînement à une résolution supérieure.
+
+Une reprise (`--resume`) relit l'architecture depuis la configuration
+embarquée dans le checkpoint. Sur MPS, une instabilité numérique en fp32 peut
+provoquer une divergence vers NaN ; `ckpt_prev.pt` conserve l'avant-dernier
+état et un pas d'apprentissage plus faible résout le problème.
 
 ## Évaluation
 
 ```bash
-python -m src.evaluate --model ddpm --ckpt runs/ddpm/ckpt_last.pt \
-    --clf runs/classifier/attr_clf.pt --data-root data/fairface -n 5000
-python -m src.evaluate --model cgan --ckpt runs/cgan/ckpt_last.pt \
-    --clf runs/classifier/attr_clf.pt --data-root data/fairface -n 5000
-```
-
-Métriques produites : **FID** (réalisme distributionnel), **IS**,
-**diversité LPIPS intra-condition** (détecte le mode collapse conditionnel),
-**fidélité aux attributs** (accord genre/peau %, MAE âge en années).
-Deux analyses supplémentaires produisent des **figures prêtes pour le rapport**
-(`figures/*.png` + données CSV) :
-
-```bash
-# Compromis fidélité/diversité du CFG (courbes FID, fidélité, LPIPS vs w)
-python -m src.sweep_guidance --ckpt runs/ddpm/ckpt_last.pt \
+# Métriques principales
+python -m src.evaluate --model ddpm --ckpt runs/ddpm_ft2/ckpt_last.pt \
     --clf runs/classifier/attr_clf.pt --data-root data/fairface \
-    --scales 1 2 3 5 8 -n 2000
+    --image-size 48 -n 5000
 
-# Équité démographique : FID + fidélité PAR groupe de peau
-python -m src.eval_by_group --ckpt runs/ddpm/ckpt_last.pt \
-    --clf runs/classifier/attr_clf.pt --data-root data/fairface -n 1000
-```
+# Compromis fidélité/diversité du guidage
+python -m src.sweep_guidance --ckpt runs/ddpm_ft2/ckpt_last.pt \
+    --clf runs/classifier/attr_clf.pt --data-root data/fairface \
+    --image-size 48 --scales 1 2 3 5 8 -n 2000
 
-## Contrôle de l'âge : défaut identifié, diagnostic et correction
+# Équité démographique
+python -m src.eval_by_group --ckpt runs/ddpm_ft2/ckpt_last.pt \
+    --clf runs/classifier/attr_clf.pt --data-root data/fairface \
+    --image-size 48 -n 1000
 
-**Le défaut.** FairFace n'annote pas l'âge à l'année mais par tranches. Le
-chargeur les ramenait au point médian *puis* filtrait sur 18-70 ans : après ce
-filtre il ne restait que **cinq valeurs d'âge distinctes** (24,5 / 34,5 / 44,5 /
-54,5 / 64,5) et la tranche 10-19 disparaissait entièrement, alors qu'elle couvre
-les 18-19 ans exigés par le sujet. Le modèle n'a donc jamais vu d'exemple sous
-24,5 ans ni au-dessus de 64,5 ans, et le protocole d'évaluation lui demandait
-des âges hors de ce support.
-
-**Le diagnostic** (`src/age_response.py`) mesure la fonction de réponse
-« âge perçu = f(âge demandé) », le classifieur d'attributs servant de juge :
-
-```bash
-python -m src.age_response --ckpt runs/ddpm/ckpt_last.pt \
+# Fonction de réponse en âge
+python -m src.age_response --ckpt runs/ddpm_ft2/ckpt_last.pt \
     --clf runs/classifier/attr_clf.pt --image-size 48 -n 48
 ```
 
-Sorties : `figures/age_response.png` (figure du rapport), `age_response.csv`,
-et une table de calibration `runs/ddpm/age_calibration.json`. Sur le premier
-modèle, la réponse mesurée est **plate** (amplitude 7,7 ans pour une demande
-allant de 18 à 70 ans) : le contrôle d'âge est absent, pas seulement imprécis.
-La calibration est alors automatiquement marquée `applicable: false` et ignorée
-à l'inférence : inverser une fonction plate reviendrait à maquiller l'absence
-de contrôle.
+L'option `--age-sampling` choisit la distribution des conditions d'âge :
+`uniform` tire sur 18-70 ans, `support` restreint aux valeurs effectivement
+présentes dans les données. Les deux sont rapportées, l'écart entre elles
+mesurant le coût de l'extrapolation.
 
-**La correction** restaure un support continu : l'âge est tiré uniformément
-dans la tranche annotée, bornée à 18-70 (`--age-jitter`, cf. `src/data.py`).
-Le dataset passe de 64 599 images / 5 âges à **73 702 images / âges continus**.
-Le modèle est repris depuis le checkpoint existant (aucune perte des 18 h déjà
-investies) et affiné :
+En haute résolution, le lot d'évaluation est plafonné et le cache
+d'allocation libéré à chaque lot : sans cette précaution, une évaluation en
+96 px sature la mémoire unifiée.
 
-```bash
-PYTORCH_ENABLE_MPS_FALLBACK=1 python3 -m src.train_ddpm \
-    --data-root data/fairface --preset mac --age-jitter \
-    --resume runs/ddpm/ckpt_last.pt --batch-size 32 --lr 5e-5 \
-    --epochs 48 --out-dir runs/ddpm_ft
-```
+## Démonstrateur
 
-L'écriture dans un répertoire distinct garantit que le modèle initial reste
-intact et que la comparaison avant/après est reproductible.
-
-**Mitigations à l'inférence** (`src/sampling.py`, sans ré-entraînement) :
-calibration de la condition (quand la réponse est inversible) et échantillonnage
-par rejet : k candidats générés, le plus conforme au sens du classifieur est
-retenu (Azadi et al., 2019) :
+Deux interfaces partagent le même moteur.
 
 ```bash
-# Fidélité seule (rapide), avec sélection best-of-4
-python -m src.evaluate --model ddpm --ckpt runs/ddpm/ckpt_last.pt \
-    --clf runs/classifier/attr_clf.pt --data-root data/fairface \
-    --image-size 48 --skip-fid --best-of 4
+# VISAGE Studio, interface sur mesure (FastAPI), recommandée en soutenance
+python server.py --ckpt runs/ddpm_ft2/ckpt_last.pt \
+    --cgan-ckpt runs/cgan/ckpt_last.pt --image-size 48
+
+# Gradio, également utilisée pour le déploiement en ligne
+python app.py --ckpt runs/ddpm_ft2/ckpt_last.pt \
+    --cgan-ckpt runs/cgan/ckpt_last.pt --image-size 48
 ```
 
-Le démonstrateur expose la même option (`app.py --best-of 4`, `server.py
---best-of 4`) ; le coût d'échantillonnage est multiplié par k.
+Cinq onglets : génération conditionnelle, interpolation continue à identité
+fixe, atlas démographique (une identité déclinée sur 7 peaux × 2 genres ×
+âges choisis), comparaison DDPM contre cGAN à attributs identiques, et une
+note technique et éthique.
 
-**Protocole d'évaluation.** `--age-sampling support` tire les conditions d'âge
-dans le support réellement appris, `uniform` (défaut) sur 18-70. Les deux sont
-rapportés : le premier mesure le contrôle, le second l'écart au cahier des
-charges.
+Latences mesurées, guidage actif : 1,31 s par visage en 50 pas DDIM sur MPS,
+0,53 s par visage pour un lot de six en 30 pas, 7,8 s sur processeur seul.
 
-## Interfaces (démonstrateur)
+### Déploiement en ligne
 
-Deux interfaces branchées sur le même moteur :
-
-**VISAGE Studio (recommandée pour la soutenance)** - frontend web sur mesure
-(FastAPI + HTML/JS), design éditorial : pastilles de peau colorées, âge en
-chiffre géant, progression du débruitage en direct, historique de séance,
-onglets Studio / Morphose / Atlas.
+Le bundle prêt à publier se trouve dans `deploy/space/` (61 Mo : poids EMA
+seuls, calibration d'âge, générateur du cGAN, interface, dépendances
+d'inférence). Depuis 2025, héberger un Space Gradio requiert un abonnement
+PRO pour un compte personnel, ou un plan Team pour une organisation.
 
 ```bash
-python server.py --ckpt runs/ddpm/ckpt_last.pt   # -> http://localhost:8000
-python server.py --demo                          # design seul, sans modèle
+python -c "
+from huggingface_hub import upload_folder
+upload_folder(repo_id='<compte>/<space>', repo_type='space',
+              folder_path='deploy/space')"
 ```
 
-**Gradio (fallback + déploiement HF Spaces)** :
+## Deux résultats méthodologiques
 
-```bash
-python app.py --ckpt runs/ddpm/ckpt_last.pt --cgan-ckpt runs/cgan/ckpt_last.pt
-# Sans modèle entraîné (test de l'UI seule) :
-python app.py --demo
-```
+### Contrôle de l'âge : un défaut invisible aux métriques agrégées
 
-5 onglets : **Génération** (attributs + guidance + seed), **Interpolation**
-(identité fixe, attributs continûment variés + **export GIF animé** du
-vieillissement), **Atlas démographique** (une identité déclinée sur
-7 peaux × 2 genres × 3 âges), **Comparaison DDPM/cGAN** (mêmes attributs,
-deux modèles), **À propos** (pipeline + éthique).
+Le premier modèle affichait des métriques globales acceptables tout en
+ignorant la condition d'âge. La mesure de la fonction de réponse, c'est-à-dire
+l'âge perçu sur les visages produits en fonction de l'âge demandé, montre une
+courbe plate : amplitude de 7,7 ans pour une consigne balayant 52 ans.
 
-## Déploiement public (lien cliquable pour l'évaluation)
+La cause n'était pas dans le modèle mais dans le chargeur de données. Le
+passage par les points médians, suivi du filtre 18-70 ans, réduisait le
+support d'entraînement à cinq valeurs et supprimait la tranche 10-19, donc
+les 18 et 19 ans exigés par le sujet.
 
-**Option A, lien temporaire (zéro config)** :
-`python app.py --ckpt ... --share` → URL publique `xxx.gradio.live`,
-valable tant que la machine tourne (72h max par lien). Idéal soutenance.
+Trois correctifs, dont aucun ne suffit seul :
 
-**Option B, lien permanent sur Hugging Face Spaces**
+| Configuration | Amplitude de réponse | MAE moyenne |
+|---|---|---|
+| v1 : support à 5 valeurs, masquage groupé | 7,7 ans | 14,3 ans |
+| v2 : support continu, masquage indépendant | 16,2 ans | 11,6 ans |
+| v2 avec guidage d'âge compositionnel | 29,7 ans | 6,1 ans |
 
-⚠️ **Depuis 2025, un Space Gradio ou Docker sur `cpu-basic` exige un compte
-PRO** (9 $/mois). L'API renvoie sinon `402 Payment Required`. Seuls les
-**Static Spaces** (HTML/JS, sans backend Python) restent gratuits.
+Le masquage indépendant par attribut est le correctif décisif. Les trois
+attributs étant sommés puis masqués en bloc par le CFG, le réseau pouvait
+annuler sa perte en s'appuyant sur le genre et la peau sans jamais exploiter
+l'âge. Le guidage compositionnel s'obtient au prix d'une dégradation des
+autres attributs, mesurée dans le rapport : environ 3,5 points de fidélité au
+genre par année de MAE gagnée. Le réglage livré est donc le guidage standard.
 
-Le bundle de déploiement est préparé dans `deploy/space/` (61 Mo) :
+### Fidélité colorimétrique : un biais mesuré et non corrigé
 
-```
-deploy/space/
-├── app.py             # interface Gradio (défauts abaissés si device == cpu)
-├── src/               # modèle, diffusion, échantillonnage
-├── ckpt_last.pt       # poids EMA seuls : 64 Mo au lieu de 254
-├── requirements.txt   # inférence uniquement (ni tensorboard, ni lpips…)
-└── README.md          # en-tête YAML du Space + avertissements + éthique
-```
+Le modèle éclaircit systématiquement la peau, de 0,053 en luminance moyenne,
+et d'autant plus qu'elle est foncée : +0,095 pour le groupe Black contre
++0,034 pour White. L'étendue de luminance entre groupes se comprime de 32 %.
 
-Le régénérer après un nouvel entraînement :
+Aucun post-traitement n'est appliqué. Ramener les couleurs vers les
+statistiques du groupe demandé produirait une fidélité artificielle sur
+l'attribut même que le projet évalue.
 
-```bash
-python3 -c "
-import torch; ck = torch.load('runs/ddpm_ft2/ckpt_last.pt', map_location='cpu')
-torch.save({'ema': ck['ema'], 'config': ck['config'], 'step': ck['step'],
-            'epoch': ck['epoch']}, 'deploy/space/ckpt_last.pt')"
-```
+Le démonstrateur écarte en revanche les tirages franchement aberrants, ceux
+dont un canal s'éloigne de plus de 3,21 écarts-types des statistiques des
+visages réels, soit leur 99,5e centile. Ce filtre concerne 27 à 29 % des
+tirages selon la tonalité demandée. Il est réservé à la démonstration et
+désactivable : aucune métrique de ce dépôt ne l'utilise.
 
-Le pousser (compte PRO requis, token en écriture) :
+## Limites connues
 
-```bash
-python3 -c "
-from huggingface_hub import create_repo, upload_folder
-R = 'elouamou/visage-generation-visages'
-create_repo(R, repo_type='space', space_sdk='gradio', private=False, exist_ok=True)
-upload_folder(repo_id=R, repo_type='space', folder_path='deploy/space')"
-```
+- **Résolution de 48 pixels**, imposée par le budget de calcul. Les FID
+  absolus ne sont pas comparables aux références haute résolution de la
+  littérature ; seules les comparaisons internes, à protocole constant, le
+  sont. Une tentative de montée à 96 px améliore l'image (netteté à 76 % du
+  réel contre 46 % pour v2 agrandi) mais perd le contrôle d'âge après
+  8 epochs sur les 14 prévues. Checkpoint conservé dans `runs/ddpm_96/`.
+- **Contrôle d'âge effectif entre 26 et 62 ans environ.** Aux extrémités, la
+  réponse reste tirée vers le centre, faute de données. Dans cette plage,
+  l'erreur passe sous celle du juge sur images réelles : la métrique sature.
+- **Équité.** L'affinage améliore le FID de tous les groupes (de 60-75 à
+  41-57) sans modifier leur hiérarchie. Il relève le niveau général, il ne
+  corrige pas l'inégalité entre groupes.
+- **Budget de conditionnement.** Les trois attributs transitent par un
+  vecteur unique injecté en un point du réseau : renforcer l'un dégrade les
+  autres. Un conditionnement par cross-attention lèverait cette contrainte.
 
-**Performances CPU mesurées** (2 threads, équivalent `cpu-basic`) :
-7,8 s par visage à 30 pas DDIM, 13,6 s à 50 pas. Un Space endormi
-(48 h sans visite) met 30 à 60 s à se réveiller : le signaler dans le
-README du Space, sinon un visiteur pressé conclut à une panne.
+## Reproductibilité et tests
 
-Ne pas pousser le dataset FairFace (licence, et inutile à la démo) : seul
-le checkpoint sert.
-
-**Si le budget PRO n'est pas disponible** : un Static Space gratuit peut
-héberger une galerie pré-calculée (grille de visages couvrant l'espace
-d'attributs, générée hors ligne). Instantané pour le visiteur, mais ce
-n'est plus le modèle qui tourne, à écrire explicitement sur la page.
-
-## Reproductibilité
-
-Seed fixée (`config.py`), configuration sauvegardée en JSON dans chaque run,
-checkpoints périodiques avec état optimiseur, poids EMA utilisés pour toute
-génération/évaluation. Le code est versionné sous git (`git log`) ; les
-données FairFace et les poids sont exclus du dépôt (licence, volume).
-
-Une reprise (`--resume`) relit l'architecture depuis la configuration
-embarquée dans le checkpoint : elle fonctionne sans avoir à repasser
-`--preset`.
-
-## Tests
+Graine fixée dans `config.py`, configuration sauvegardée en JSON dans chaque
+run, checkpoints périodiques avec état de l'optimiseur, poids EMA utilisés
+pour toute génération et toute évaluation. Le code est versionné sous git ;
+les données FairFace et les poids sont exclus du dépôt pour des raisons de
+licence et de volume.
 
 ```bash
 python3 -m tests.test_pipeline
 ```
 
-Vérifications sans GPU ni checkpoint : réversibilité de l'encodage d'âge,
-cohérence tranches/points médians, **support d'âge du dataset** (dégénéré en
-mode historique, continu avec `--age-jitter`), refus d'une calibration non
-inversible, et sélection best-of-k. C'est l'absence de ce dernier type de
-vérification qui a laissé un support d'âge à cinq valeurs traverser 18 h
-d'entraînement.
+Les tests vérifient sans GPU ni checkpoint : la réversibilité de l'encodage
+d'âge, la cohérence entre tranches et points médians, le support d'âge du
+jeu de données dans les deux modes, le refus d'une calibration non
+inversible, la sélection best-of-k, et les deux régimes de masquage du CFG.
+L'absence de ce dernier type de vérification est ce qui a laissé un support
+d'âge dégénéré traverser dix-huit heures d'entraînement.
 
-## Fidélité colorimétrique et filtre du démonstrateur
+## Éthique
 
-Deux problèmes distincts, dont un seul se corrige.
-
-**Biais systématique d'éclaircissement.** Le modèle éclaircit la peau de 0,053
-en luminance moyenne, et d'autant plus qu'elle est foncée : +0,095 pour le
-groupe Black (0,323 réel contre 0,418 généré), +0,034 pour White. L'étendue
-entre groupes se comprime de 32 % (0,088 à 0,060). Aucun post-traitement n'est
-appliqué : ramener les couleurs vers les statistiques du groupe demandé
-fabriquerait la fidélité de l'attribut que le projet mesure.
-
-**Portée.** Le filtre couvre la génération simple. Interpolation et atlas
-partagent un bruit initial fixe pour garder la même identité : régénérer une
-image isolée la casserait, donc l'interpolation rejoue la séquence entière et
-l'atlas reste non filtré.
-
-**Tirages aberrants.** Le démonstrateur écarte et régénère ceux dont un canal
-s'éloigne de plus de 3,21 écarts-types des statistiques des visages réels
-(99,5e centile). Le taux atteint 27 à 29 %. Ni les pas de débruitage (30, 50,
-80) ni le guidage (1,5 à 3) ne le réduisent. Le filtre est réservé au
-démonstrateur et désactivable ; **aucune métrique du rapport ne l'utilise.**
-
-## Limites connues
-
-* **Résolution 48 px** : imposée par le budget de calcul (entraînement sur
-  machine personnelle, MPS). Le terme « photo-réaliste » du sujet n'est atteint
-  qu'au sens du réalisme distributionnel mesuré (FID) à cette résolution ; les
-  FID absolus ne sont pas comparables aux références haute résolution de la
-  littérature. Seules les comparaisons internes, à protocole constant, sont
-  interprétables.
-* **Montée en résolution tentée, puis abandonnée** : un entraînement en 96 px
-  repris depuis v2 (8,3 epochs) améliore nettement l'image : netteté 76 % du
-  réel contre 46 % pour v2 agrandi, mais **perd le contrôle d'âge** (MAE
-  14,0 ans contre 6,1). Huit epochs sur quatorze n'ont pas suffi à réinstaller
-  le conditionnement à la nouvelle échelle. Voir rapport §9 ; checkpoint
-  conservé dans `runs/ddpm_96/`, figures dans `figures/age_response_96.*`.
-* **Contrôle d'âge** : inopérant sur v1, rétabli sur v2 (`runs/ddpm_ft2/`).
-  Effectif entre ~26 et ~62 ans ; aux extrémités (18 et 70 ans) la réponse
-  reste tirée vers le centre, faute de données. Entre 26 et 62 ans, l'erreur
-  passe sous celle du juge sur images réelles (6,5 ans) : la métrique sature.
-* **Budget de conditionnement** : les trois attributs sont sommés en un
-  vecteur unique, donc renforcer le guidage de l'âge dégrade le genre et la
-  peau (~3,5 points de fidélité genre par année de MAE gagnée, cf.
-  `figures/age_guidance_tradeoff.png`). Le réglage livré est le guidage
-  standard, sans supplément d'âge.
-* **Juge d'évaluation** : le classifieur de fidélité plafonne à 62 % sur la
-  peau et commet 6,5 ans d'erreur sur images réelles ; les scores de fidélité
-  sont donc des bornes inférieures.
-
-## Éthique (résumé, détails dans le rapport, section 7)
-
-Dataset FairFace choisi pour son équilibre démographique ; évaluation par
-groupe et non en moyenne seule ; visages 100 % synthétiques (aucune
-inversion/édition de personnes réelles possible) ; usage strictement
-pédagogique, usurpation d'identité proscrite.
+FairFace a été retenu pour son équilibre démographique. Les visages produits
+sont entièrement synthétiques : le modèle génère depuis du bruit et ne peut
+ni reconstituer ni éditer une personne réelle. L'évaluation est menée par
+groupe démographique et non en moyenne seule, ce qui rend visibles des écarts
+qu'un agrégat masquerait, notamment le biais d'éclaircissement documenté plus
+haut. L'usage est strictement pédagogique ; toute usurpation d'identité est
+proscrite. La réflexion complète figure en section 7 de l'état de l'art.
