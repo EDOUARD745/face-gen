@@ -34,6 +34,15 @@ prend alors 30 à 60 s. Ce n'est pas une panne.
 personnelle). Le FID de 24,0 se lit à cette résolution et n'est pas comparable
 aux références haute résolution de la littérature.
 
+## Portée du filtre colorimétrique
+
+L'onglet Génération écarte et régénère les tirages dont la couleur sort de la
+plage des visages réels (27 à 29 % des tirages). Les onglets Interpolation et
+Atlas partagent un même bruit initial pour préserver l'identité : y régénérer
+une image isolée casserait cette propriété. L'interpolation rejoue donc la
+séquence entière si nécessaire ; l'atlas, qui coûte 14 visages par âge, est
+affiché tel quel.
+
 ## Éthique
 
 Les visages produits sont **entièrement synthétiques** : le modèle génère

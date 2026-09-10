@@ -329,6 +329,11 @@ entre groupes se comprime de 32 % (0,088 à 0,060). Aucun post-traitement n'est
 appliqué : ramener les couleurs vers les statistiques du groupe demandé
 fabriquerait la fidélité de l'attribut que le projet mesure.
 
+**Portée.** Le filtre couvre la génération simple. Interpolation et atlas
+partagent un bruit initial fixe pour garder la même identité : régénérer une
+image isolée la casserait, donc l'interpolation rejoue la séquence entière et
+l'atlas reste non filtré.
+
 **Tirages aberrants.** Le démonstrateur écarte et régénère ceux dont un canal
 s'éloigne de plus de 3,21 écarts-types des statistiques des visages réels
 (99,5e centile). Le taux atteint 27 à 29 %. Ni les pas de débruitage (30, 50,

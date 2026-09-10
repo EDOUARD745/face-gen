@@ -284,7 +284,10 @@ class Engine:
                 ckpt, self.device)
         if cgan_ckpt:
             cfg = Config()
-            self.cgan = Generator(cfg.gan.latent_dim, image_size=image_size,
+            # self.image_size vient du checkpoint DDPM : le cGAN a été entraîné
+            # à la même résolution, s'en remettre au défaut 64 ferait échouer le
+            # chargement des poids.
+            self.cgan = Generator(cfg.gan.latent_dim, image_size=self.image_size,
                                   base=cfg.gan.base_channels).to(self.device)
             ck = torch.load(cgan_ckpt, map_location=self.device)
             self.cgan.load_state_dict(ck["G"])
@@ -306,10 +309,15 @@ class Engine:
         }
 
     def _placeholder(self, n, text="Mode démo\nEntraînez le modèle"):
-        """Images factices pour tester l'UI sans checkpoint."""
-        rng = np.random.default_rng(0)
-        return [(rng.uniform(20, 60, (self.image_size, self.image_size, 3))
-                 .astype(np.uint8)) for _ in range(n)]
+        """Vignettes neutres quand aucun modèle n'est chargé.
+
+        Volontairement uniformes et non bruitées : une image de bruit affichée
+        sous l'étiquette d'un modèle se lit comme une sortie de ce modèle. Le
+        démonstrateur ne doit jamais faire passer une absence de checkpoint
+        pour un résultat.
+        """
+        gris = np.full((self.image_size, self.image_size, 3), 38, dtype=np.uint8)
+        return [gris.copy() for _ in range(n)]
 
     @staticmethod
     def _to_pil_list(x):
@@ -347,10 +355,12 @@ class Engine:
         def mk(age, g, s):
             return {"age": torch.tensor([self._age_norm(age)]),
                     "gender": torch.tensor([g]), "skin": torch.tensor([s])}
-        x = interp_fn(self.diffusion, mk(age_a, gender_a, skin_a),
-                      mk(age_b, gender_b, skin_b), frames=int(frames),
-                      image_size=self.image_size, guidance_scale=guidance,
-                      seed=int(seed) if seed >= 0 else 0)
+        base = int(seed) if seed >= 0 else 0
+        x = self._sequence_propre(lambda essai: interp_fn(
+            self.diffusion, mk(age_a, gender_a, skin_a),
+            mk(age_b, gender_b, skin_b), frames=int(frames),
+            image_size=self.image_size, guidance_scale=guidance,
+            seed=base + 1000 * essai))
         return self._to_pil_list(x)
 
     def make_gif(self, age_a, gender_a, skin_a, age_b, gender_b, skin_b,
@@ -368,6 +378,22 @@ class Engine:
         pil[0].save(path, save_all=True, append_images=pil[1:],
                     duration=int(1000 / fps), loop=0)
         return path, path
+
+    def _sequence_propre(self, echantillonne, essais=3):
+        """Rejoue une séquence entière tant qu'elle contient des tirages hors
+        plage colorimétrique. Interpolation et atlas partagent un même bruit
+        initial : régénérer une image isolée casserait l'identité commune, il
+        faut donc changer de graine pour toute la séquence."""
+        from src.sampling import colour_outliers
+        meilleur, score = None, None
+        for i in range(essais if self.reject_artifacts else 1):
+            x = echantillonne(i)
+            n_hors = int(colour_outliers(x).sum().item())
+            if score is None or n_hors < score:
+                meilleur, score = x, n_hors
+            if n_hors == 0:
+                break
+        return meilleur
 
     def atlas(self, ages, guidance, steps, seed, progress_cb=None):
         """Atlas démographique : MÊME identité (même bruit initial) déclinée
@@ -392,10 +418,17 @@ class Engine:
             "skin": torch.tensor([s for s, _, _ in combos],
                                  dtype=torch.long, device=self.device),
         }
-        x = self.diffusion.sample_ddim(
-            attrs, (n, 3, self.image_size, self.image_size),
-            steps=int(steps), guidance_scale=guidance, x_T=x_T,
-            progress_cb=progress_cb)
+        def echantillonne(essai):
+            g2 = torch.Generator(device=self.device).manual_seed(int(seed) + 1000 * essai)
+            bruit = torch.randn(1, 3, self.image_size, self.image_size,
+                                device=self.device, generator=g2).repeat(n, 1, 1, 1)
+            return self.diffusion.sample_ddim(
+                attrs, (n, 3, self.image_size, self.image_size),
+                steps=int(steps), guidance_scale=guidance, x_T=bruit,
+                progress_cb=progress_cb)
+
+        # l'atlas coûte 42 échantillonnages : une seule passe, on garde tel quel
+        x = echantillonne(0)
         return list(zip(self._to_pil_list(x), captions))
 
     def compare(self, age, gender, skin, n, guidance, seed,
@@ -522,13 +555,17 @@ def build_ui(engine):
                 "visuelle directe : le contrôle modifie les attributs "
                 "démographiques sans changer la « personne ».")
             with gr.Row():
+                # Sur processeur, chaque case coûte ~8 s : 3 âges font
+                # 42 visages, soit plus de 4 minutes. On en propose un seul par
+                # défaut, l'utilisateur ajoute les autres en connaissance de cause.
                 ages_sel = gr.CheckboxGroup(
-                    choices=[25, 45, 65], value=[25, 45, 65],
-                    label="Âges de l'atlas")
+                    choices=[25, 45, 65],
+                    value=[45] if on_cpu else [25, 45, 65],
+                    label="Âges de l'atlas (chaque âge ajoute 14 visages)")
                 guid_at = gr.Slider(1.0, 8.0, value=3.0, step=0.5,
                                     label="Guidance")
-                steps_at = gr.Slider(10, 100, value=30, step=10,
-                                     label="Pas DDIM")
+                steps_at = gr.Slider(10, 100, value=20 if on_cpu else 30,
+                                     step=10, label="Pas DDIM")
                 seed_at = gr.Number(value=7, label="Seed identité",
                                     precision=0)
             btn_at = gr.Button("Générer l'atlas", variant="primary", size="lg")
@@ -613,6 +650,14 @@ if __name__ == "__main__":
         for cand in ("ckpt_last.pt", "runs/ddpm/ckpt_last.pt"):
             if os.path.exists(cand):
                 args.ckpt = cand
+                break
+    # Sans checkpoint cGAN, l'onglet de comparaison n'a rien à montrer : mieux
+    # vaut le détecter à la racine (déploiement Spaces) que d'afficher des
+    # vignettes vides sous l'étiquette du modèle de référence.
+    if args.cgan_ckpt is None:
+        for cand in ("cgan_ckpt.pt", "runs/cgan/ckpt_last.pt"):
+            if os.path.exists(cand):
+                args.cgan_ckpt = cand
                 break
 
     engine = Engine(ckpt=args.ckpt, cgan_ckpt=args.cgan_ckpt,
