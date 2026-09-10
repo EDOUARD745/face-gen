@@ -326,6 +326,12 @@ d'entraînement.
   FID absolus ne sont pas comparables aux références haute résolution de la
   littérature. Seules les comparaisons internes, à protocole constant, sont
   interprétables.
+* **Montée en résolution tentée, puis abandonnée** : un entraînement en 96 px
+  repris depuis v2 (8,3 epochs) améliore nettement l'image — netteté 76 % du
+  réel contre 46 % pour v2 agrandi — mais **perd le contrôle d'âge** (MAE
+  14,0 ans contre 6,1). Huit epochs sur quatorze n'ont pas suffi à réinstaller
+  le conditionnement à la nouvelle échelle. Voir rapport §9 ; checkpoint
+  conservé dans `runs/ddpm_96/`, figures dans `figures/age_response_96.*`.
 * **Contrôle d'âge** : inopérant sur v1, rétabli sur v2 (`runs/ddpm_ft2/`).
   Effectif entre ~26 et ~62 ans ; aux extrémités (18 et 70 ans) la réponse
   reste tirée vers le centre, faute de données. Entre 26 et 62 ans, l'erreur

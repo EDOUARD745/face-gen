@@ -120,6 +120,10 @@ def main():
     p.add_argument("--best-of", type=int, default=1,
                    help="k candidats par condition, le plus conforme est gardé")
     args = p.parse_args()
+    if args.image_size >= 96 and args.batch_size > 32:
+        print(f"batch ramené de {args.batch_size} à 32 ({args.image_size}px : "
+              f"un lot de 100 sature la mémoire unifiée)")
+        args.batch_size = 32
 
     device = get_device()
     rng = np.random.default_rng(0)
@@ -184,6 +188,16 @@ def main():
     return
 
 
+def _free(device):
+    """Libère le cache d'allocation : sans cela, sur MPS, la mémoire unifiée
+    grimpe au fil des lots jusqu'à faire basculer la machine en swap. Observé
+    en 96px : 33 Go de swap et un processus bloqué en attente disque."""
+    if str(device) == "mps":
+        torch.mps.empty_cache()
+    elif str(device) == "cuda":
+        torch.cuda.empty_cache()
+
+
 def run_distribution_metrics(args, gen, device, random_attrs):
     """FID, IS et diversité LPIPS intra-condition."""
     rng = np.random.default_rng(0)
@@ -198,10 +212,11 @@ def run_distribution_metrics(args, gen, device, random_attrs):
     cfg.data.image_size = args.image_size
     real_ds = make_dataset(cfg.data, split="train", train_tf=False)
     real_dl = DataLoader(real_ds, batch_size=args.batch_size, shuffle=True,
-                         num_workers=4)
+                         num_workers=2 if args.image_size >= 96 else 4)
     n_real = 0
     for imgs, _ in real_dl:
         fid.update(to_uint8(imgs).to(metric_device), real=True)
+        del imgs
         n_real += imgs.shape[0]
         if n_real >= args.num_samples:
             break
@@ -214,8 +229,10 @@ def run_distribution_metrics(args, gen, device, random_attrs):
         x = gen(attrs, b)
         fid.update(to_uint8(x).to(metric_device), real=False)
         inception.update(to_uint8(x).to(metric_device))
+        del x
+        _free(device)
         n_done += b
-        print(f"  {n_done}/{args.num_samples}")
+        print(f"  {n_done}/{args.num_samples}", flush=True)
 
     fid_score = fid.compute().item()
     is_mean, is_std = inception.compute()

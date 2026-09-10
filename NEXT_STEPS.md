@@ -12,7 +12,36 @@
 
 ---
 
-## État au dernier point (mis à jour)
+## Décision finale : le modèle livré est v2 (48 px)
+
+`runs/ddpm_ft2/ckpt_last.pt` — FID 24,0, MAE d'âge 10,8 ans (6,1 avec guidage
+d'âge), genre 86,8 %. Bundle de déploiement prêt dans `deploy/space/`
+(checkpoint EMA + calibration d'âge + interface).
+
+La tentative en 96 px (`runs/ddpm_96/`, 8,3 epochs) est conservée mais **non
+livrée** : image plus nette (76 % de la netteté du réel contre 46 % pour v2
+agrandi) mais contrôle d'âge perdu (MAE 14,0 ans). Voir rapport §9.
+
+Reprendre ce run si le temps le permet :
+
+```bash
+caffeinate -i nohup env PYTORCH_ENABLE_MPS_FALLBACK=1 PYTHONUNBUFFERED=1 \
+    /usr/local/bin/python3 -m src.train_ddpm --data-root data/fairface \
+    --preset mac96 --age-jitter --independent-drop --ema-decay 0.999 \
+    --resume runs/ddpm_96/ckpt_last.pt --batch-size 16 --lr 1e-4 \
+    --epochs 62 --out-dir runs/ddpm_96 > logs/ddpm_96.log 2>&1 &
+```
+
+Il reste ~6 epochs sur les 14 prévues (~11 h). Vérifier la reprise du contrôle
+d'âge avec `python3 -m src.age_response --ckpt runs/ddpm_96/ckpt_last.pt
+--image-size 96` avant toute décision de bascule.
+
+⚠️ **Évaluer en 96 px demande un lot réduit** : `src.evaluate -n 2000` avec le
+lot par défaut a saturé la mémoire unifiée (33 Go de swap, processus bloqué).
+Le garde-fou est en place (lot ramené à 32 et cache libéré à chaque lot au-delà
+de 96 px) mais rester prudent sur `-n`.
+
+## État précédent (v2)
 
 - ✅ **Modèle v2 livré** : `runs/ddpm_ft2/ckpt_last.pt` — 48 epochs cumulées,
   99 100 steps, aucun NaN. FID 24,0 (v1 : 40,2), MAE d'âge 10,8 ans, genre
