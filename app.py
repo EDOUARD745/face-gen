@@ -379,7 +379,7 @@ class Engine:
                     duration=int(1000 / fps), loop=0)
         return path, path
 
-    def _sequence_propre(self, echantillonne, essais=3):
+    def _sequence_propre(self, echantillonne, essais=2):
         """Rejoue une séquence entière tant qu'elle contient des tirages hors
         plage colorimétrique. Interpolation et atlas partagent un même bruit
         initial : régénérer une image isolée casserait l'identité commune, il
@@ -418,22 +418,40 @@ class Engine:
             "skin": torch.tensor([s for s, _, _ in combos],
                                  dtype=torch.long, device=self.device),
         }
-        def echantillonne(essai):
-            g2 = torch.Generator(device=self.device).manual_seed(int(seed) + 1000 * essai)
-            bruit = torch.randn(1, 3, self.image_size, self.image_size,
-                                device=self.device, generator=g2).repeat(n, 1, 1, 1)
-            return self.diffusion.sample_ddim(
-                attrs, (n, 3, self.image_size, self.image_size),
-                steps=int(steps), guidance_scale=guidance, x_T=bruit,
-                progress_cb=progress_cb)
+        def bruit_pour(graine):
+            g2 = torch.Generator(device=self.device).manual_seed(int(graine))
+            return torch.randn(1, 3, self.image_size, self.image_size,
+                               device=self.device, generator=g2)
 
-        # l'atlas coûte 42 échantillonnages : une seule passe, on garde tel quel
-        x = echantillonne(0)
+        # L'atlas répète UN SEUL bruit initial sur toutes les cellules : un
+        # tirage défaillant contamine la grille entière. Plutôt que de rejouer
+        # l'atlas (14 à 42 échantillonnages), on éprouve la graine sur une seule
+        # cellule, ce qui coûte une image au lieu d'une grille.
+        graine = int(seed)
+        if self.reject_artifacts:
+            from src.sampling import colour_outliers
+            temoin = {k: v[:1] for k, v in attrs.items()}
+            for essai in range(3):
+                candidate = graine + 1000 * essai
+                x1 = self.diffusion.sample_ddim(
+                    temoin, (1, 3, self.image_size, self.image_size),
+                    steps=int(steps), guidance_scale=guidance,
+                    x_T=bruit_pour(candidate))
+                if not bool(colour_outliers(x1)[0]):
+                    graine = candidate
+                    break
+
+        x = self.diffusion.sample_ddim(
+            attrs, (n, 3, self.image_size, self.image_size),
+            steps=int(steps), guidance_scale=guidance,
+            x_T=bruit_pour(graine).repeat(n, 1, 1, 1),
+            progress_cb=progress_cb)
         return list(zip(self._to_pil_list(x), captions))
 
     def compare(self, age, gender, skin, n, guidance, seed,
                 progress_cb=None):
-        ddpm = self.generate(age, gender, skin, n, guidance, 50, seed,
+        pas = 30 if str(self.device) == "cpu" else 50
+        ddpm = self.generate(age, gender, skin, n, guidance, pas, seed,
                              progress_cb=progress_cb)
         if self.cgan is None:
             return ddpm, self._placeholder(n)
@@ -564,8 +582,8 @@ def build_ui(engine):
                     label="Âges de l'atlas (chaque âge ajoute 14 visages)")
                 guid_at = gr.Slider(1.0, 8.0, value=3.0, step=0.5,
                                     label="Guidance")
-                steps_at = gr.Slider(10, 100, value=20 if on_cpu else 30,
-                                     step=10, label="Pas DDIM")
+                steps_at = gr.Slider(10, 100, value=30, step=10,
+                                     label="Pas DDIM")
                 seed_at = gr.Number(value=7, label="Seed identité",
                                     precision=0)
             btn_at = gr.Button("Générer l'atlas", variant="primary", size="lg")
@@ -600,7 +618,7 @@ def build_ui(engine):
             gr.Markdown(f"""
 ### Pipeline
 `Attributs (âge, genre, peau)` → `Embeddings appris` → `UNet conditionnel`
-→ `DDIM {50} pas + Classifier-Free Guidance` → `Visage 64×64`
+→ `DDIM {steps_default} pas + Classifier-Free Guidance` → `Visage {engine.image_size}×{engine.image_size}`
 
 ### Contrôles
 | Attribut | Encodage | Plage |
