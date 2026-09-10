@@ -12,7 +12,13 @@
 
 ---
 
-## Décision finale : le modèle livré est v2 (48 px)
+## Projet rendu
+
+Livré le 10 septembre 2026 : démonstrateur en ligne
+(https://huggingface.co/spaces/keliankey/visage-generation-visage), dépôt
+public, état de l'art et rapport d'expériences.
+
+## Modèle livré : v2 (48 px)
 
 `runs/ddpm_ft2/ckpt_last.pt` : FID 24,0, MAE d'âge 10,8 ans (6,1 avec guidage
 d'âge), genre 86,8 %. Bundle de déploiement prêt dans `deploy/space/`
@@ -140,7 +146,7 @@ PYTORCH_ENABLE_MPS_FALLBACK=1 /usr/local/bin/python3 -m src.interpolate \
 ## d) Démonstrateur
 
 ```bash
-# VISAGE Studio (soutenance)
+# VISAGE Studio
 PYTORCH_ENABLE_MPS_FALLBACK=1 /usr/local/bin/python3 server.py \
     --ckpt runs/ddpm_ft/ckpt_last.pt        # -> http://localhost:8000
 

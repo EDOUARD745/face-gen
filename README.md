@@ -3,6 +3,8 @@
 Projet MSC AIC, module IA générative.
 Edouard Louamou, Isaac Koumous, Jeffrey Tandjeu, Kelian Suami.
 
+**Démonstrateur en ligne :** https://huggingface.co/spaces/keliankey/visage-generation-visage
+
 Système de génération conditionnelle de visages permettant de contrôler
 l'âge (18 à 70 ans, continu), le genre et la tonalité de peau (7 groupes
 FairFace). L'approche principale est un modèle de diffusion débruitante
@@ -174,7 +176,7 @@ d'allocation libéré à chaque lot : sans cette précaution, une évaluation en
 Deux interfaces partagent le même moteur.
 
 ```bash
-# VISAGE Studio, interface sur mesure (FastAPI), recommandée en soutenance
+# VISAGE Studio, interface sur mesure (FastAPI)
 python server.py --ckpt runs/ddpm_ft2/ckpt_last.pt \
     --cgan-ckpt runs/cgan/ckpt_last.pt --image-size 48
 
@@ -193,10 +195,10 @@ Latences mesurées, guidage actif : 1,31 s par visage en 50 pas DDIM sur MPS,
 
 ### Déploiement en ligne
 
-Le bundle prêt à publier se trouve dans `deploy/space/` (61 Mo : poids EMA
-seuls, calibration d'âge, générateur du cGAN, interface, dépendances
-d'inférence). Depuis 2025, héberger un Space Gradio requiert un abonnement
-PRO pour un compte personnel, ou un plan Team pour une organisation.
+Le démonstrateur est publié sur Hugging Face Spaces à l'adresse indiquée en
+tête de ce fichier. Le bundle correspondant se trouve dans `deploy/space/`
+(77 Mo : poids EMA du DDPM, générateur du cGAN, calibration d'âge, interface
+et dépendances d'inférence).
 
 ```bash
 python -c "
@@ -204,6 +206,23 @@ from huggingface_hub import upload_folder
 upload_folder(repo_id='<compte>/<space>', repo_type='space',
               folder_path='deploy/space')"
 ```
+
+Deux contraintes de la plateforme méritent d'être connues. Héberger un Space
+Gradio requiert depuis 2025 un abonnement PRO pour un compte personnel, ou un
+plan Team pour une organisation. Le Space s'exécute sur ZeroGPU, une
+allocation de GPU à la demande : les fonctions de génération sont décorées par
+`@spaces.GPU`, décorateur sans effet hors de cet environnement, et les poids
+sont placés sur `cuda` dès le chargement.
+
+Le quota de calcul est décompté du **visiteur** et non du propriétaire du
+Space, et la durée déclarée dans le décorateur est comparée au quota restant
+avant exécution. Un visiteur non connecté ne disposant que de deux minutes par
+jour, des durées généreuses le bloqueraient dès son premier appel : elles sont
+donc calibrées entre 30 et 60 secondes selon la fonction.
+
+Latences mesurées sur ZeroGPU, huit visages en 50 pas : 8,2 s au premier
+appel, allocation comprise, puis 4,7 s. Les mêmes calculs demandent environ
+100 s sur le palier processeur gratuit.
 
 ## Deux résultats méthodologiques
 
@@ -272,7 +291,15 @@ désactivable : aucune métrique de ce dépôt ne l'utilise.
 
 Graine fixée dans `config.py`, configuration sauvegardée en JSON dans chaque
 run, checkpoints périodiques avec état de l'optimiseur, poids EMA utilisés
-pour toute génération et toute évaluation. Le code est versionné sous git ;
+pour toute génération et toute évaluation.
+
+Le bruit initial de l'atlas et de l'interpolation est tiré sur processeur puis
+transféré : `torch.randn` ne produit pas la même séquence sur CPU et sur CUDA
+pour une graine donnée. Sans cette précaution, ces deux fonctions fixant leur
+identité sur un tirage unique, une graine validée en local donne une image
+différente une fois le démonstrateur déployé sur GPU. Vérification sur la
+graine 7 de l'atlas : luminance moyenne 109,4 en local contre 109,6 en ligne,
+écart entre cellules identique à 28,2. Le code est versionné sous git ;
 les données FairFace et les poids sont exclus du dépôt pour des raisons de
 licence et de volume.
 
