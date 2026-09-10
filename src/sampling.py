@@ -106,31 +106,32 @@ def sample_best_of(gen_fn, attrs, n, clf, k=4, **score_kw):
 # validation, 99e centile) : au-delà, un tirage sort de la plage des images
 # réelles. Environ 2-3 % des tirages du modèle v2 franchissent ce seuil et
 # apparaissent comme des visages verts ou sursaturés.
-REAL_SAT_P99 = 0.487
-REAL_CAST_P99 = 0.480
-# Excès de vert = moyenne du canal vert moins le plus fort des canaux rouge et
-# bleu. Sur 1024 visages réels de FairFace, la médiane est de -0,123 et le 99e
-# centile de 0,000 : un visage humain n'est jamais dominé par le vert. Les
-# tirages verdâtres du modèle montent jusqu'à +0,085, alors que leur saturation
-# globale reste sous le seuil précédent. Ce critère les isole là où la
-# saturation seule les laissait passer.
-REAL_GREEN_P99 = 0.0
+# Statistiques colorimétriques des visages réels (FairFace 48 px, 4096 images
+# de validation) : moyenne et écart-type de la moyenne de chaque canal.
+# Un tirage est écarté si l'un de ses canaux s'éloigne de plus de 3,21
+# écarts-types, seuil correspondant au 99,5e centile des images réelles.
+#
+# Ce critère vise les tirages franchement cassés (dominantes bleues, cyan,
+# magenta) et NON le biais systématique du modèle, qui éclaircit la peau de
+# +0,053 en luminance et comprime de 32 % l'écart entre groupes (voir rapport,
+# section 8.1). Un filtre ne corrige pas un décalage de distribution : il ne
+# fait qu'écarter les valeurs extrêmes.
+REAL_MEAN = (0.4806, 0.3556, 0.3025)
+REAL_STD = (0.1398, 0.1219, 0.1241)
+REAL_Z_P995 = 3.21
 
 
 @torch.no_grad()
-def colour_outliers(x, sat_max=REAL_SAT_P99, cast_max=REAL_CAST_P99,
-                    green_max=REAL_GREEN_P99):
+def colour_outliers(x, z_max=REAL_Z_P995):
     """Masque (B,) des tirages hors de la plage colorimétrique du réel."""
-    im = (x.clamp(-1, 1) + 1) / 2
-    sat = (im.max(1).values - im.min(1).values).mean((1, 2))
-    ch = im.mean((2, 3))
-    cast = ch.max(1).values - ch.min(1).values
-    green = ch[:, 1] - torch.max(ch[:, 0], ch[:, 2])
-    return (sat > sat_max) | (cast > cast_max) | (green > green_max)
+    ch = ((x.clamp(-1, 1) + 1) / 2).mean((2, 3))
+    mu = torch.tensor(REAL_MEAN, device=x.device, dtype=ch.dtype)
+    sd = torch.tensor(REAL_STD, device=x.device, dtype=ch.dtype)
+    return ((ch - mu).abs() / sd).max(1).values > z_max
 
 
 @torch.no_grad()
-def resample_artifacts(gen_fn, attrs, n, x=None, max_rounds=3):
+def resample_artifacts(gen_fn, attrs, n, x=None, max_rounds=5):
     """Régénère les tirages aberrants, sans toucher aux autres.
 
     Réservé à la DÉMONSTRATION : appliqué pendant une évaluation, ce filtre

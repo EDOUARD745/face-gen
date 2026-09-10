@@ -318,21 +318,22 @@ inversible, et sélection best-of-k. C'est l'absence de ce dernier type de
 vérification qui a laissé un support d'âge à cinq valeurs traverser 18 h
 d'entraînement.
 
-## Filtre colorimétrique du démonstrateur
+## Fidélité colorimétrique et filtre du démonstrateur
 
-Une partie des tirages sort de la plage colorimétrique des visages réels, le
-plus souvent avec une dominante verte. Le critère retenu est l'excès de vert
-(moyenne du canal vert moins le plus fort des canaux rouge et bleu) : sur
-1024 visages réels de FairFace, sa médiane vaut -0,123 et son 99e centile
-0,000, un visage humain n'étant jamais dominé par le vert. Les tirages
-concernés atteignent +0,085 alors que leur saturation globale reste sous le
-seuil, ce qui rend ce critère nettement plus discriminant.
+Deux problèmes distincts, dont un seul se corrige.
 
-**16,1 % des tirages** franchissent ce seuil (mesuré sur 192 échantillons) et
-sont régénérés, ce qui ramène le taux résiduel à 0. Le filtre est réservé au
-démonstrateur et se désactive : appliqué pendant une évaluation, il
-embellirait le FID en écartant les mauvais tirages du modèle. **Toutes les
-métriques du rapport sont mesurées sans lui.**
+**Biais systématique d'éclaircissement.** Le modèle éclaircit la peau de 0,053
+en luminance moyenne, et d'autant plus qu'elle est foncée : +0,095 pour le
+groupe Black (0,323 réel contre 0,418 généré), +0,034 pour White. L'étendue
+entre groupes se comprime de 32 % (0,088 à 0,060). Aucun post-traitement n'est
+appliqué : ramener les couleurs vers les statistiques du groupe demandé
+fabriquerait la fidélité de l'attribut que le projet mesure.
+
+**Tirages aberrants.** Le démonstrateur écarte et régénère ceux dont un canal
+s'éloigne de plus de 3,21 écarts-types des statistiques des visages réels
+(99,5e centile). Le taux atteint 27 à 29 %. Ni les pas de débruitage (30, 50,
+80) ni le guidage (1,5 à 3) ne le réduisent. Le filtre est réservé au
+démonstrateur et désactivable ; **aucune métrique du rapport ne l'utilise.**
 
 ## Limites connues
 
