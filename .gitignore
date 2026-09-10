@@ -9,3 +9,7 @@ __pycache__/
 *.pyc
 .DS_Store
 .venv/
+# Configuration locale d'outils
+.claude/
+.vscode/
+.idea/
