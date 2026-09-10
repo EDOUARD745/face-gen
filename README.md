@@ -241,11 +241,11 @@ deux modèles), **À propos** (pipeline + éthique).
 
 ## Déploiement public (lien cliquable pour l'évaluation)
 
-**Option A : lien temporaire (zéro config)** :
+**Option A, lien temporaire (zéro config)** :
 `python app.py --ckpt ... --share` → URL publique `xxx.gradio.live`,
 valable tant que la machine tourne (72h max par lien). Idéal soutenance.
 
-**Option B : lien permanent : Hugging Face Spaces**
+**Option B, lien permanent sur Hugging Face Spaces**
 
 ⚠️ **Depuis 2025, un Space Gradio ou Docker sur `cpu-basic` exige un compte
 PRO** (9 $/mois). L'API renvoie sinon `402 Payment Required`. Seuls les
