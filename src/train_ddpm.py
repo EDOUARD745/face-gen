@@ -54,8 +54,12 @@ def main():
     p.add_argument("--lr", type=float, default=2e-4)
     p.add_argument("--out-dir", default="runs/ddpm")
     p.add_argument("--resume", default=None)
-    p.add_argument("--preset", default=None, choices=["mac"],
-                   help="'mac' : modèle allégé pour Apple Silicon (MPS)")
+    p.add_argument("--preset", default=None, choices=["mac", "mac64", "mac96"],
+                   help="'mac' : 48px (modèle v1/v2) ; 'mac64' / 'mac96' : "
+                        "même architecture à plus haute résolution. "
+                        "L'attention reste au troisième étage (résolution/4), "
+                        "ce qui garde la structure des poids identique et "
+                        "permet de reprendre un checkpoint 48px.")
     p.add_argument("--independent-drop", action="store_true",
                    help="masque chaque attribut indépendamment (CFG) : force "
                         "le réseau à exploiter l'âge seul")
@@ -89,21 +93,27 @@ def main():
               f"{cfg.data.image_size}px, base_channels={cfg.model.base_channels}")
         del _ck
 
-    if args.preset == "mac":
-        # ~20M params, 48px : qualité correcte en ~1-2 jours sur M1/M2/M3
-        cfg.data.image_size = 48
+    if args.preset:
+        # Même squelette à trois étages pour les trois présets. L'attention est
+        # placée à résolution/4, donc toujours au troisième étage : la liste des
+        # modules — et donc les clés du state_dict — reste identique d'une
+        # résolution à l'autre, ce qui autorise la reprise d'un checkpoint 48px
+        # pour un entraînement en 64 ou 96 px (redimensionnement progressif).
+        size = {"mac": 48, "mac64": 64, "mac96": 96}[args.preset]
+        default_batch = {"mac": 32, "mac64": 32, "mac96": 16}[args.preset]
+        cfg.data.image_size = size
         cfg.model.base_channels = 64
-        cfg.model.channel_mults = (1, 2, 4)      # 48 -> 24 -> 12
-        cfg.model.attn_resolutions = (12,)
+        cfg.model.channel_mults = (1, 2, 4)      # size -> size/2 -> size/4
+        cfg.model.attn_resolutions = (size // 4,)
         cfg.model.emb_dim = 256
-        cfg.train.batch_size = min(args.batch_size, 32)
+        cfg.train.batch_size = min(args.batch_size, default_batch)
         if args.epochs == 100:                   # défaut non modifié par l'user
             cfg.train.epochs = 40
         if args.lr == 2e-4:                      # lr plus prudent sur MPS fp32
             cfg.train.lr = 1e-4
-        print("Préset mac : 48px, base_channels=64, batch",
-              cfg.train.batch_size, ",", cfg.train.epochs, "epochs, lr",
-              cfg.train.lr)
+        print(f"Préset {args.preset} : {size}px, base_channels=64, attention à "
+              f"{size // 4}px, batch {cfg.train.batch_size}, "
+              f"{cfg.train.epochs} epochs, lr {cfg.train.lr}")
 
     torch.manual_seed(cfg.train.seed)
     device = get_device()
