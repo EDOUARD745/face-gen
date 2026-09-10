@@ -108,16 +108,25 @@ def sample_best_of(gen_fn, attrs, n, clf, k=4, **score_kw):
 # apparaissent comme des visages verts ou sursaturés.
 REAL_SAT_P99 = 0.487
 REAL_CAST_P99 = 0.480
+# Excès de vert = moyenne du canal vert moins le plus fort des canaux rouge et
+# bleu. Sur 1024 visages réels de FairFace, la médiane est de -0,123 et le 99e
+# centile de 0,000 : un visage humain n'est jamais dominé par le vert. Les
+# tirages verdâtres du modèle montent jusqu'à +0,085, alors que leur saturation
+# globale reste sous le seuil précédent. Ce critère les isole là où la
+# saturation seule les laissait passer.
+REAL_GREEN_P99 = 0.0
 
 
 @torch.no_grad()
-def colour_outliers(x, sat_max=REAL_SAT_P99, cast_max=REAL_CAST_P99):
+def colour_outliers(x, sat_max=REAL_SAT_P99, cast_max=REAL_CAST_P99,
+                    green_max=REAL_GREEN_P99):
     """Masque (B,) des tirages hors de la plage colorimétrique du réel."""
     im = (x.clamp(-1, 1) + 1) / 2
     sat = (im.max(1).values - im.min(1).values).mean((1, 2))
     ch = im.mean((2, 3))
     cast = ch.max(1).values - ch.min(1).values
-    return (sat > sat_max) | (cast > cast_max)
+    green = ch[:, 1] - torch.max(ch[:, 0], ch[:, 2])
+    return (sat > sat_max) | (cast > cast_max) | (green > green_max)
 
 
 @torch.no_grad()

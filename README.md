@@ -318,6 +318,22 @@ inversible, et sélection best-of-k. C'est l'absence de ce dernier type de
 vérification qui a laissé un support d'âge à cinq valeurs traverser 18 h
 d'entraînement.
 
+## Filtre colorimétrique du démonstrateur
+
+Une partie des tirages sort de la plage colorimétrique des visages réels, le
+plus souvent avec une dominante verte. Le critère retenu est l'excès de vert
+(moyenne du canal vert moins le plus fort des canaux rouge et bleu) : sur
+1024 visages réels de FairFace, sa médiane vaut -0,123 et son 99e centile
+0,000, un visage humain n'étant jamais dominé par le vert. Les tirages
+concernés atteignent +0,085 alors que leur saturation globale reste sous le
+seuil, ce qui rend ce critère nettement plus discriminant.
+
+**16,1 % des tirages** franchissent ce seuil (mesuré sur 192 échantillons) et
+sont régénérés, ce qui ramène le taux résiduel à 0. Le filtre est réservé au
+démonstrateur et se désactive : appliqué pendant une évaluation, il
+embellirait le FID en écartant les mauvais tirages du modèle. **Toutes les
+métriques du rapport sont mesurées sans lui.**
+
 ## Limites connues
 
 * **Résolution 48 px** : imposée par le budget de calcul (entraînement sur
