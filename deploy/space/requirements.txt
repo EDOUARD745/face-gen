@@ -7,3 +7,4 @@ Pillow>=10.0
 pandas>=2.0
 tqdm>=4.66
 gradio>=4.44
+spaces        # allocation GPU a la demande (ZeroGPU)

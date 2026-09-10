@@ -16,7 +16,7 @@ Projet MSC AIC, IA générative. **DDPM conditionnel entraîné from scratch**
 Contrôle de l'âge (18-70 ans, continu), du genre et de la tonalité de peau
 (7 groupes FairFace).
 
-## ⏱️ Avant de cliquer
+## ⏱️ Avant de cliquer (quota GPU)
 
 Ce Space tourne sur **CPU gratuit (2 vCPU)** : comptez **~8 s par visage** à
 30 pas DDIM. Après 48 h sans visite, le Space s'endort : le premier chargement

@@ -3,7 +3,16 @@ import torch
 
 
 def get_device():
-    """Meilleur device disponible : CUDA > MPS (Apple Silicon) > CPU."""
+    """Meilleur device disponible : CUDA > MPS (Apple Silicon) > CPU.
+
+    Sur Hugging Face ZeroGPU, le GPU n'est réel qu'à l'intérieur des fonctions
+    décorées par @spaces.GPU, mais PyTorch émule CUDA en dehors : les poids
+    doivent malgré tout être placés sur cuda dès le chargement, une bascule
+    tardive étant nettement moins efficace.
+    """
+    import os
+    if os.environ.get("SPACES_ZERO_GPU"):
+        return "cuda"
     if torch.cuda.is_available():
         return "cuda"
     if getattr(torch.backends, "mps", None) and torch.backends.mps.is_available():

@@ -7,7 +7,13 @@ Sans checkpoint (démo UI seule) :
     python app.py --demo
 """
 import argparse
+import os
 import pathlib
+
+try:                     # présent uniquement sur Hugging Face ZeroGPU
+    import spaces
+except ImportError:      # le décorateur devient une identité en local
+    spaces = None
 
 import numpy as np
 import torch
@@ -470,6 +476,21 @@ class Engine:
 GRADIO_MAJOR = int(gr.__version__.split(".")[0])
 
 
+def sur_gpu(fn, secondes):
+    """Réserve un GPU ZeroGPU le temps de l'appel, sans effet ailleurs.
+
+    La durée déclarée est décomptée du quota du VISITEUR, pas de celui du
+    propriétaire du Space, et ZeroGPU refuse une demande qui dépasse le quota
+    restant. Un visiteur non connecté ne dispose que de deux minutes par jour :
+    des durées généreuses le bloqueraient dès son premier clic. Les valeurs
+    ci-dessous sont calibrées sur le coût réel d'une génération 48 px sur GPU,
+    de l'ordre de quelques secondes, avec une marge de sécurité.
+    """
+    if spaces is None or not os.environ.get("SPACES_ZERO_GPU"):
+        return fn
+    return spaces.GPU(duration=secondes)(fn)
+
+
 def build_ui(engine):
     # Sur CPU (déploiement Hugging Face Spaces gratuit), un visage coûte ~8 s à
     # 30 pas DDIM : on réduit les valeurs par défaut pour que la première
@@ -530,7 +551,7 @@ def build_ui(engine):
                 with gr.Column(scale=2):
                     gallery = gr.Gallery(label="Visages générés", columns=4,
                                          height=560, object_fit="cover")
-            btn.click(engine.generate,
+            btn.click(sur_gpu(engine.generate, 30),
                       [age, gender, skin, n, guidance, steps, seed], gallery)
 
         # ------------------ Onglet 2 : Interpolation ------------------
@@ -554,14 +575,14 @@ def build_ui(engine):
             btn_i = gr.Button("Interpoler", variant="primary", size="lg")
             strip = gr.Gallery(label="Transition A → B", columns=8, height=220,
                                object_fit="cover")
-            btn_i.click(engine.interpolate,
+            btn_i.click(sur_gpu(engine.interpolate, 30),
                         [age_a, gender_a, skin_a, age_b, gender_b, skin_b,
                          frames, guid_i, seed_i], strip)
             with gr.Row():
                 btn_gif = gr.Button("◉ Exporter en GIF animé", size="lg")
                 gif_view = gr.Image(label="Animation (boomerang)", height=280)
                 gif_file = gr.File(label="Télécharger le GIF")
-            btn_gif.click(engine.make_gif,
+            btn_gif.click(sur_gpu(engine.make_gif, 45),
                           [age_a, gender_a, skin_a, age_b, gender_b, skin_b,
                            frames, guid_i, seed_i], [gif_view, gif_file])
 
@@ -589,7 +610,7 @@ def build_ui(engine):
             btn_at = gr.Button("Générer l'atlas", variant="primary", size="lg")
             atlas_gal = gr.Gallery(label="Atlas (survolez pour les attributs)",
                                    columns=6, height=640, object_fit="cover")
-            btn_at.click(engine.atlas, [ages_sel, guid_at, steps_at, seed_at],
+            btn_at.click(sur_gpu(engine.atlas, 60), [ages_sel, guid_at, steps_at, seed_at],
                          atlas_gal)
 
         # ------------------ Onglet 4 : DDPM vs cGAN ------------------
@@ -609,7 +630,7 @@ def build_ui(engine):
                 gal_ddpm = gr.Gallery(label="DDPM + CFG", columns=4, height=280)
                 gal_cgan = gr.Gallery(label="cGAN (baseline)", columns=4,
                                       height=280)
-            btn_c.click(engine.compare,
+            btn_c.click(sur_gpu(engine.compare, 45),
                         [age_c, gender_c, skin_c, n_c, guid_c, seed_c],
                         [gal_ddpm, gal_cgan])
 
