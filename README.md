@@ -1,4 +1,4 @@
-# VISAGE — Génération de visages photo-réalistes avec contrôle d'attributs
+# VISAGE : Génération de visages photo-réalistes avec contrôle d'attributs
 
 Projet MSC AIC. Système de génération conditionnelle de visages contrôlant
 **l'âge (18-70 ans, continu)**, **le genre** et **la couleur de peau**
@@ -8,7 +8,7 @@ Projet MSC AIC. Système de génération conditionnelle de visages contrôlant
 Classifier-Free Guidance, échantillonnage DDIM (quasi temps réel).
 **Baseline de comparaison** : cGAN à discriminateur à projection.
 
-**Modèle livré : v2** (`runs/ddpm_ft2/ckpt_last.pt`) — FID 24,0, MAE d'âge
+**Modèle livré : v2** (`runs/ddpm_ft2/ckpt_last.pt`). FID 24,0, MAE d'âge
 10,8 ans, fidélité genre 86,8 %. Il succède à v1 (FID 40,2) dont le contrôle
 d'âge était inopérant ; le diagnostic et la correction sont documentés
 ci-dessous et au §6-8 du rapport d'expériences.
@@ -26,7 +26,7 @@ face-gen/
 ├── app.py                  # Interface Gradio (démonstrateur)
 ├── requirements.txt
 ├── rapport/
-│   └── Etat_de_l_art.docx  # Livrable 1 (30%) — ouvrir dans Word,
+│   └── Etat_de_l_art.docx  # Livrable 1 (30%) : ouvrir dans Word,
 │                           #   accepter la mise à jour des champs (sommaire)
 └── src/
     ├── config.py           # Hyperparamètres centralisés (reproductibilité)
@@ -74,13 +74,13 @@ Ordre conseillé : classifieur (rapide, requis pour l'évaluation) → cGAN
 (valide le pipeline données à moindre coût) → DDPM (le gros morceau).
 
 ```bash
-# 1. Classifieur d'attributs (~1h) — nécessaire pour l'évaluation de fidélité
+# 1. Classifieur d'attributs (~1h) : nécessaire pour l'évaluation de fidélité
 python -m src.train_classifier --data-root data/fairface --epochs 10
 
 # 2. Baseline cGAN (quelques heures)
 python -m src.train_cgan --data-root data/fairface --image-size 64
 
-# 3. DDPM conditionnel (modèle principal) — ~24-48h sur RTX 3080/4090 en 64px
+# 3. DDPM conditionnel (modèle principal) : ~24-48h sur RTX 3080/4090 en 64px
 python -m src.train_ddpm --data-root data/fairface --image-size 64 \
     --batch-size 64 --epochs 100
 
@@ -172,7 +172,7 @@ et une table de calibration `runs/ddpm/age_calibration.json`. Sur le premier
 modèle, la réponse mesurée est **plate** (amplitude 7,7 ans pour une demande
 allant de 18 à 70 ans) : le contrôle d'âge est absent, pas seulement imprécis.
 La calibration est alors automatiquement marquée `applicable: false` et ignorée
-à l'inférence — inverser une fonction plate reviendrait à maquiller l'absence
+à l'inférence : inverser une fonction plate reviendrait à maquiller l'absence
 de contrôle.
 
 **La correction** restaure un support continu : l'âge est tiré uniformément
@@ -193,7 +193,7 @@ intact et que la comparaison avant/après est reproductible.
 
 **Mitigations à l'inférence** (`src/sampling.py`, sans ré-entraînement) :
 calibration de la condition (quand la réponse est inversible) et échantillonnage
-par rejet — k candidats générés, le plus conforme au sens du classifieur est
+par rejet : k candidats générés, le plus conforme au sens du classifieur est
 retenu (Azadi et al., 2019) :
 
 ```bash
@@ -241,11 +241,11 @@ deux modèles), **À propos** (pipeline + éthique).
 
 ## Déploiement public (lien cliquable pour l'évaluation)
 
-**Option A — lien temporaire (zéro config)** :
+**Option A : lien temporaire (zéro config)** :
 `python app.py --ckpt ... --share` → URL publique `xxx.gradio.live`,
 valable tant que la machine tourne (72h max par lien). Idéal soutenance.
 
-**Option B — lien permanent : Hugging Face Spaces**
+**Option B : lien permanent : Hugging Face Spaces**
 
 ⚠️ **Depuis 2025, un Space Gradio ou Docker sur `cpu-basic` exige un compte
 PRO** (9 $/mois). L'API renvoie sinon `402 Payment Required`. Seuls les
@@ -292,7 +292,7 @@ le checkpoint sert.
 **Si le budget PRO n'est pas disponible** : un Static Space gratuit peut
 héberger une galerie pré-calculée (grille de visages couvrant l'espace
 d'attributs, générée hors ligne). Instantané pour le visiteur, mais ce
-n'est plus le modèle qui tourne — à écrire explicitement sur la page.
+n'est plus le modèle qui tourne, à écrire explicitement sur la page.
 
 ## Reproductibilité
 
@@ -327,8 +327,8 @@ d'entraînement.
   littérature. Seules les comparaisons internes, à protocole constant, sont
   interprétables.
 * **Montée en résolution tentée, puis abandonnée** : un entraînement en 96 px
-  repris depuis v2 (8,3 epochs) améliore nettement l'image — netteté 76 % du
-  réel contre 46 % pour v2 agrandi — mais **perd le contrôle d'âge** (MAE
+  repris depuis v2 (8,3 epochs) améliore nettement l'image : netteté 76 % du
+  réel contre 46 % pour v2 agrandi, mais **perd le contrôle d'âge** (MAE
   14,0 ans contre 6,1). Huit epochs sur quatorze n'ont pas suffi à réinstaller
   le conditionnement à la nouvelle échelle. Voir rapport §9 ; checkpoint
   conservé dans `runs/ddpm_96/`, figures dans `figures/age_response_96.*`.
@@ -345,7 +345,7 @@ d'entraînement.
   peau et commet 6,5 ans d'erreur sur images réelles ; les scores de fidélité
   sont donc des bornes inférieures.
 
-## Éthique (résumé — détails dans le rapport, section 7)
+## Éthique (résumé, détails dans le rapport, section 7)
 
 Dataset FairFace choisi pour son équilibre démographique ; évaluation par
 groupe et non en moyenne seule ; visages 100 % synthétiques (aucune

@@ -1,4 +1,4 @@
-# Suite du projet — instructions prêtes à copier-coller
+# Suite du projet : instructions prêtes à copier-coller
 
 > **Machine** : Apple M5 Pro (MPS, 24 Go). Interpréteur = **`/usr/local/bin/python3`**
 > (Framework 3.13 : torch+MPS, tensorboard, lpips, torchmetrics y sont installés).
@@ -14,7 +14,7 @@
 
 ## Décision finale : le modèle livré est v2 (48 px)
 
-`runs/ddpm_ft2/ckpt_last.pt` — FID 24,0, MAE d'âge 10,8 ans (6,1 avec guidage
+`runs/ddpm_ft2/ckpt_last.pt` : FID 24,0, MAE d'âge 10,8 ans (6,1 avec guidage
 d'âge), genre 86,8 %. Bundle de déploiement prêt dans `deploy/space/`
 (checkpoint EMA + calibration d'âge + interface).
 
@@ -43,7 +43,7 @@ de 96 px) mais rester prudent sur `-n`.
 
 ## État précédent (v2)
 
-- ✅ **Modèle v2 livré** : `runs/ddpm_ft2/ckpt_last.pt` — 48 epochs cumulées,
+- ✅ **Modèle v2 livré** : `runs/ddpm_ft2/ckpt_last.pt` : 48 epochs cumulées,
   99 100 steps, aucun NaN. FID 24,0 (v1 : 40,2), MAE d'âge 10,8 ans, genre
   86,8 %, peau 44,7 %, LPIPS 0,388.
 - ✅ Contrôle d'âge rétabli : amplitude de réponse 7,7 → 16,2 ans (guidage
@@ -60,11 +60,11 @@ de 96 px) mais rester prudent sur `-n`.
 - ✅ Données FairFace : `data/fairface/` (64 599 train / 8 100 val avec les points
   médians ; **73 702** avec `--age-jitter`, voir plus bas).
 - ✅ Classifieur : `runs/classifier/attr_clf.pt` (genre 92,9 %, peau 62,1 %, MAE âge 6,5 ans).
-- ✅ cGAN 48 px : `runs/cgan/ckpt_last.pt` (FID 139,6 — mode collapse conditionnel).
+- ✅ cGAN 48 px : `runs/cgan/ckpt_last.pt` (FID 139,6, mode collapse conditionnel).
 - ✅ DDPM v1 : `runs/ddpm/ckpt_last.pt`, 40 epochs / 80 720 steps (FID 40,2).
 - ✅ Évaluations v1 : FID/IS/LPIPS/fidélité, sweep CFG, équité par groupe, interpolation.
 - ⚠️ **Défaut identifié** : le contrôle d'âge est inopérant (réponse plate, amplitude
-  7,7 ans) — cause = support d'âge réduit à 5 valeurs par le mapping tranche→médian
+  7,7 ans) : cause = support d'âge réduit à 5 valeurs par le mapping tranche→médian
   suivi du filtre 18-70. Diagnostic : `figures/age_response.png`.
 - 🔄 **DDPM v2 (fine-tune `--age-jitter`)** : en cours dans `runs/ddpm_ft/`.
 - ✅ Dépôt git initialisé (données et poids exclus).
@@ -131,7 +131,7 @@ PYTORCH_ENABLE_MPS_FALLBACK=1 /usr/local/bin/python3 -m src.eval_by_group \
     --ckpt runs/ddpm_ft/ckpt_last.pt --clf runs/classifier/attr_clf.pt \
     --data-root data/fairface --image-size 48 -n 1000
 
-# Interpolation d'âge (figure) — c'est la démonstration visuelle du gain
+# Interpolation d'âge (figure) : c'est la démonstration visuelle du gain
 PYTORCH_ENABLE_MPS_FALLBACK=1 /usr/local/bin/python3 -m src.interpolate \
     --ckpt runs/ddpm_ft/ckpt_last.pt --age-a 20 --age-b 68 --frames 8 \
     --out figures/interp_age_ft.png
@@ -158,7 +158,7 @@ PYTORCH_ENABLE_MPS_FALLBACK=1 /usr/local/bin/python3 app.py \
 
 ## Correctifs de code appliqués
 
-- `src/data.py` : mode `--age-jitter` — l'âge est tiré dans la tranche FairFace
+- `src/data.py` : mode `--age-jitter` : l'âge est tiré dans la tranche FairFace
   annotée (bornée à 18-70) au lieu du point médian. Restaure un support continu
   et récupère les 18-19 ans (9 103 images). Comportement historique conservé par
   défaut pour la reproductibilité du run v1.

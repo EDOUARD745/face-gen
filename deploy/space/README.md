@@ -9,9 +9,9 @@ pinned: false
 license: cc-by-4.0
 ---
 
-# VISAGE — génération conditionnelle de visages
+# VISAGE : génération conditionnelle de visages
 
-Projet MSC AIC — IA générative. **DDPM conditionnel entraîné from scratch**
+Projet MSC AIC, IA générative. **DDPM conditionnel entraîné from scratch**
 (15,9 M paramètres, 48 px) avec Classifier-Free Guidance, échantillonnage DDIM.
 Contrôle de l'âge (18-70 ans, continu), du genre et de la tonalité de peau
 (7 groupes FairFace).
@@ -19,7 +19,7 @@ Contrôle de l'âge (18-70 ans, continu), du genre et de la tonalité de peau
 ## ⏱️ Avant de cliquer
 
 Ce Space tourne sur **CPU gratuit (2 vCPU)** : comptez **~8 s par visage** à
-30 pas DDIM. Après 48 h sans visite, le Space s'endort — le premier chargement
+30 pas DDIM. Après 48 h sans visite, le Space s'endort : le premier chargement
 prend alors 30 à 60 s. Ce n'est pas une panne.
 
 ## Ce que le modèle fait, et ne fait pas
