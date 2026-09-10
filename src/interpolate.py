@@ -28,9 +28,13 @@ def interpolate(diffusion, attrs_a, attrs_b, frames=8, image_size=64,
     """Retourne (frames, 3, H, W) : transition continue A -> B."""
     device = diffusion.device
     model = diffusion.model
-    g = torch.Generator(device=device).manual_seed(seed)
-    x_T = torch.randn(1, 3, image_size, image_size, device=device,
-                      generator=g).repeat(frames, 1, 1, 1)
+    # Bruit tiré sur CPU puis transféré : torch.randn ne donne pas la même
+    # séquence sur CPU et sur CUDA pour une graine identique. Sans cela, une
+    # même graine produit une identité différente selon le matériel, et un
+    # résultat validé en local ne se retrouve pas en ligne.
+    g = torch.Generator().manual_seed(seed)
+    x_T = torch.randn(1, 3, image_size, image_size, device="cpu",
+                      generator=g).to(device).repeat(frames, 1, 1, 1)
 
     emb_a = model.attr_embedder({k: v.to(device) for k, v in attrs_a.items()})
     emb_b = model.attr_embedder({k: v.to(device) for k, v in attrs_b.items()})

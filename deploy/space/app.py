@@ -337,6 +337,7 @@ class Engine:
             return self._placeholder(n)
         if seed >= 0:
             torch.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed) if torch.cuda.is_available() else None
         attrs = self._attrs(age, gender, skin, n)
 
         def gen(a, m):
@@ -425,9 +426,13 @@ class Engine:
                                  dtype=torch.long, device=self.device),
         }
         def bruit_pour(graine):
-            g2 = torch.Generator(device=self.device).manual_seed(int(graine))
+            # Tirage sur CPU puis transfert : les séquences de torch.randn
+            # diffèrent entre CPU et CUDA à graine égale. L'atlas fixant son
+            # identité sur ce seul tirage, une graine validée en local donnait
+            # une grille toute différente une fois déployée sur GPU.
+            g2 = torch.Generator().manual_seed(int(graine))
             return torch.randn(1, 3, self.image_size, self.image_size,
-                               device=self.device, generator=g2)
+                               device="cpu", generator=g2).to(self.device)
 
         # L'atlas répète UN SEUL bruit initial sur toutes les cellules : un
         # tirage défaillant contamine la grille entière. Plutôt que de rejouer
@@ -463,6 +468,7 @@ class Engine:
             return ddpm, self._placeholder(n)
         if seed >= 0:
             torch.manual_seed(seed)
+            torch.cuda.manual_seed_all(seed) if torch.cuda.is_available() else None
         attrs = self._attrs(age, gender, skin, n)
         with torch.no_grad():
             z = torch.randn(n, Config().gan.latent_dim, device=self.device)
